@@ -1138,6 +1138,27 @@ a:focus-visible {
   }
 }
 
+.button:disabled {
+  cursor: progress;
+  opacity: 0.52;
+}
+
+.runtime-proof {
+  margin: 4px 0 0;
+  color: #5f6168;
+  font: 12px/1.3 Arial, Helvetica, sans-serif;
+}
+
+.runtime-proof span {
+  color: var(--rig-red);
+  font-weight: 700;
+}
+
+.core-disc strong {
+  font-size: clamp(30px, 5vw, 42px);
+  letter-spacing: -0.08em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

@@ -1,6 +1,6 @@
 # CSS Foundation Toy
 
-A static interactive joke about an impossible foundation model. It runs in the browser with HTML, CSS, and JavaScript only. There is no backend, build step, or runtime service.
+An intentionally plain-looking page that runs a real small language model in the browser. It uses the ONNX export of `onnx-community/SmolLM2-135M-Instruct-ONNX-MHA` with Transformers.js. WebGPU is used when available; WebAssembly is the fallback. There is no inference backend or build step.
 
 Live site: <https://ericspencer.us/css-llm/>
 
@@ -11,6 +11,8 @@ python3 -m http.server 4175
 ```
 
 Then open <http://127.0.0.1:4175/>.
+
+The first visit downloads the model and tokenizer files from the Hugging Face Hub. Transformers.js caches them in the browser, so later visits can run without downloading them again. The prompt and generation stay in the browser tab.
 
 ## Deployment
 

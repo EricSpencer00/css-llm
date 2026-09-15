@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#342535" />
-    <meta name="description" content="A suspiciously capable CSS foundation model." />
+    <meta name="theme-color" content="#d5d7df" />
+    <meta name="description" content="A real 135M-parameter small language model running locally in your browser." />
     <link rel="canonical" href="https://ericspencer.us/css-llm/" />
-    <meta property="og:title" content="FWD/∞ — the model that learned nothing" />
-    <meta property="og:description" content="A suspiciously capable CSS foundation model." />
+    <meta property="og:title" content="FWD/∞ — browser-local small language model" />
+    <meta property="og:description" content="A real 135M-parameter small language model running locally in your browser." />
     <meta property="og:url" content="https://ericspencer.us/css-llm/" />
     <meta property="og:type" content="website" />
-    <title>FWD/∞ — the model that learned nothing</title>
+    <title>FWD/∞ — browser-local small language model</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -22,10 +22,10 @@
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>fwd/∞</span>
         </a>
-        <div class="header-title">CSS Foundation Default Page</div>
+        <div class="header-title">CSS Model Default Page</div>
         <div class="header-status" aria-label="System status">
           <span class="status-light" aria-hidden="true"></span>
-          <span id="systemStatus">live-ish</span>
+          <span id="systemStatus">booting local model</span>
           <span class="status-separator" aria-hidden="true">/</span>
           <span>build 0.0.∞</span>
         </div>
@@ -36,24 +36,24 @@
         <section class="hero-grid" aria-labelledby="hero-title">
           <div class="hero-copy">
             <p class="eyebrow">Foundation model / field test 01</p>
-            <h1 id="hero-title">It learned <br /><em>nothing.</em> <br />It knows <span>everything.</span></h1>
-            <p class="hero-lede">A zero-shot, multimodal foundation model trained on the only data that matters: heat, telemetry, and a deeply unreasonable amount of CSS.</p>
+            <h1 id="hero-title">It runs locally. <br /><em>Actually.</em> <br />No server <span>required.</span></h1>
+            <p class="hero-lede">A real 135M-parameter small language model, loaded into this browser and executed on your hardware with WebGPU or WebAssembly.</p>
             <div class="hero-actions">
-              <button class="button button-primary" id="anticipateButton" type="button">Let it predict you</button>
-              <button class="button button-quiet" id="resetButton" type="button">Reset the lie</button>
+              <button class="button button-primary" id="anticipateButton" type="button" disabled>Run local inference</button>
+              <button class="button button-quiet" id="resetButton" type="button">Clear output</button>
             </div>
             <div class="claim-strip" aria-label="Model inputs">
-              <span><b>trained on</b> raw signals</span>
-              <span><b>modalities</b> telemetry + heat</span>
-              <span><b>examples</b> 0</span>
+              <span><b>model</b> SmolLM2-135M-Instruct</span>
+              <span><b>weights</b> ONNX q4</span>
+              <span><b>inference</b> local</span>
             </div>
           </div>
 
           <div class="model-stage" aria-label="Live model visualization">
             <div class="stage-grid" aria-hidden="true"></div>
             <div class="stage-topline">
-              <span>Core / css.kernel</span>
-              <span class="stage-pill"><span class="status-light"></span> stable enough</span>
+              <span>Core / onnx.runtime</span>
+              <span class="stage-pill"><span class="status-light"></span> local only</span>
             </div>
             <div class="orbit-system" aria-hidden="true">
               <div class="orbit orbit-one"><i></i></div>
@@ -61,19 +61,20 @@
               <div class="orbit orbit-three"><i></i></div>
               <div class="core-ring"></div>
               <div class="core-disc">
-                <span class="core-label">FWD</span>
-                <strong>∞</strong>
-                <span class="core-foot">recursive / probably</span>
+                <span class="core-label">SLM</span>
+                <strong>135M</strong>
+                <span class="core-foot">in browser</span>
               </div>
             </div>
             <div class="stage-readout">
               <p class="readout-label">Current inference</p>
-              <p id="stageStatus">waiting for a prompt you have not written yet.</p>
+              <p id="stageStatus">loading the model into your browser.</p>
+              <p class="runtime-proof"><span id="runtimeValue">preparing runtime</span> · no inference server</p>
               <div class="readout-meter" aria-hidden="true"><span id="stageMeter"></span></div>
             </div>
             <div class="stage-footline">
-              <span>signal: <b id="signalValue">0.∞</b></span>
-              <span>latency: <b id="stageLatency">−72h</b></span>
+              <span>stream updates: <b id="signalValue">0</b></span>
+              <span>latency: <b id="stageLatency">not run</b></span>
             </div>
           </div>
         </section>
@@ -83,27 +84,27 @@
             <div class="panel-topline">
               <span class="panel-index">01</span>
               <div>
-                <p class="panel-kicker">Temporal inference</p>
+                <p class="panel-kicker">Browser inference</p>
                 <h2>Prediction window</h2>
               </div>
-              <span class="latency-badge" id="latencyBadge">−72h</span>
+              <span class="latency-badge" id="latencyBadge">local</span>
             </div>
-            <p class="panel-intro">What you were about to type, three days ago.</p>
+            <p class="panel-intro">Ask a real small language model. Your prompt stays in this tab.</p>
             <div class="prompt-lab">
               <label for="promptInput">Prompt signal</label>
               <div class="prompt-line">
                 <span aria-hidden="true">you@now:~$</span>
-                <input id="promptInput" type="text" maxlength="96" autocomplete="off" placeholder="type something the model already knows" />
+                <input id="promptInput" type="text" maxlength="160" autocomplete="off" placeholder="ask the local model something" />
               </div>
             </div>
             <div class="prediction-output" aria-live="polite">
-              <div class="output-topline"><span>anticipated query</span><span class="output-light"></span></div>
-              <p id="predictedText">“can css really do this?”</p>
+              <div class="output-topline"><span id="outputLabel">local model output</span><span class="output-light"></span></div>
+              <p id="predictedText">Loading the model. First run may take a minute.</p>
               <span class="output-cursor" aria-hidden="true"></span>
             </div>
             <div class="panel-footline">
-              <span>confidence <b id="confidenceValue">99.9%</b></span>
-              <span>examples used <b>0</b></span>
+              <span>model <b>SmolLM2 · 135M</b></span>
+              <span>stream updates <b id="tokenCount">0</b></span>
             </div>
           </div>
 
@@ -111,12 +112,12 @@
             <div class="panel-topline">
               <span class="panel-index">02</span>
               <div>
-                <p class="panel-kicker">Compute fabric</p>
-                <h2>Toothbrush cluster</h2>
+                <p class="panel-kicker">Actual compute path</p>
+                <h2>Worker + WebGPU</h2>
               </div>
               <span class="cluster-count" id="clusterCount">07 / 09</span>
             </div>
-            <p class="panel-intro">Distributed inference, powered by whatever is charging in the bathroom.</p>
+            <p class="panel-intro">The model runs in a dedicated worker. The toothbrushes are only a diagnostic metaphor.</p>
             <div class="toothbrush-bus" id="toothbrushBus" aria-label="Nine toothbrush compute nodes">
               <span class="bus-line bus-line-a" aria-hidden="true"></span>
               <span class="bus-line bus-line-b" aria-hidden="true"></span>
@@ -131,8 +132,8 @@
               <button class="toothbrush-node node-i" type="button" aria-label="Toothbrush node nine, offline"><i></i><b>B-09</b></button>
             </div>
             <div class="cluster-actions">
-              <button class="text-button" id="rerouteButton" type="button">Reroute the bristles</button>
-              <span>bluetooth / <b id="clusterLoad">68%</b> load</span>
+              <button class="text-button" id="rerouteButton" type="button">Pulse the metaphor</button>
+              <span>runtime / <b id="clusterLoad">detecting</b></span>
             </div>
           </div>
 
@@ -140,19 +141,19 @@
             <div class="panel-topline">
               <span class="panel-index">03</span>
               <div>
-                <p class="panel-kicker">Weightless architecture</p>
-                <h2>Kerning arithmetic</h2>
+                <p class="panel-kicker">Runtime facts</p>
+                <h2>What is actually running</h2>
               </div>
               <span class="recursion-tag">recursive</span>
             </div>
-            <div class="kerning-machine" aria-label="Recursive font kerning arithmetic visualization">
+            <div class="kerning-machine" aria-label="Model and runtime facts">
               <div class="type-stack"><span>CSS</span><span>CSS</span><span>CSS</span><span>CSS</span><span>CSS</span></div>
-              <div class="equation"><code>font-kerning: normal</code><span>+</span><code>letter-spacing: −0.07em</code><span>=</span><strong id="recursionValue">0.∞</strong></div>
+              <div class="equation"><code>model: SmolLM2-135M</code><span>+</span><code>runtime: ONNX</code><span>=</span><strong id="recursionValue">local</strong></div>
               <div class="kerning-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
             </div>
             <div class="panel-footline">
-              <span>runtime <b>inside stylesheet</b></span>
-              <span>stack depth <b id="stackDepth">∞</b></span>
+              <span>inference <b>worker</b></span>
+              <span>device <b id="stackDepth">detecting</b></span>
             </div>
           </div>
         </section>
@@ -160,29 +161,29 @@
         <section class="claims-section" aria-labelledby="claims-title">
           <div class="claims-heading">
             <p class="eyebrow">The intern assignment</p>
-            <h2 id="claims-title">Five claims. Zero peer review.</h2>
-            <p>Tap a row to inspect the methodology.</p>
+            <h2 id="claims-title">Five facts. One real model.</h2>
+            <p>Tap a row to inspect what is actually happening.</p>
           </div>
           <div class="claims-list">
             <details class="claim-row">
-              <summary><span class="claim-number">01</span><span class="claim-text"><b>Zero-shot, multimodal foundation model</b><small>Learns without examples, handles multiple data types.</small></span><span class="claim-state">sounds right</span></summary>
-              <p>We removed all examples and replaced them with confidence. The modalities are raw signals, which is a technical way of saying “numbers we found.”</p>
+              <summary><span class="claim-number">01</span><span class="claim-text"><b>SmolLM2-135M-Instruct</b><small>A 135M-parameter text-generation model from Hugging Face.</small></span><span class="claim-state">real weights</span></summary>
+              <p>This page uses the ONNX export of SmolLM2-135M-Instruct through Transformers.js. It is a text-only small language model, not a multimodal one.</p>
             </details>
             <details class="claim-row">
-              <summary><span class="claim-number">02</span><span class="claim-text"><b>Trained only on satellite telemetry + thermal sensor data</b><small>No images. No text. Just raw signals.</small></span><span class="claim-state">very pure</span></summary>
-              <p>The model has never seen a picture or read a sentence. It has, however, developed a strong opinion about ambient heat.</p>
+              <summary><span class="claim-number">02</span><span class="claim-text"><b>Runs on your hardware</b><small>WebGPU when available, WebAssembly when it is not.</small></span><span class="claim-state">browser-local</span></summary>
+              <p>The browser downloads the model files from the Hugging Face Hub, then executes generation locally in a worker. No prompt is sent to an inference API.</p>
             </details>
             <details class="claim-row">
-              <summary><span class="claim-number">03</span><span class="claim-text"><b>Runs entirely inside a CSS file</b><small>Via recursive font-kerning arithmetic, somehow.</small></span><span class="claim-state">validated</span></summary>
-              <p>CSS is Turing complete. Nobody knows why this is relevant here, but the browser has not stopped us.</p>
+              <summary><span class="claim-number">03</span><span class="claim-text"><b>ONNX Runtime Web</b><small>Transformers.js runs the exported model in the browser.</small></span><span class="claim-state">actual runtime</span></summary>
+              <p>CSS is presentation here. The model execution is performed by ONNX Runtime Web, selected by Transformers.js.</p>
             </details>
             <details class="claim-row">
-              <summary><span class="claim-number">04</span><span class="claim-text"><b>Infinite negative latency</b><small>Predicts user prompts 3 days before they type them.</small></span><span class="claim-state">already done</span></summary>
-              <p>Every prompt is a rerun. The input field is mostly a ceremonial object for the timeline.</p>
+              <summary><span class="claim-number">04</span><span class="claim-text"><b>Streaming output</b><small>Generated tokens appear as the model produces them.</small></span><span class="claim-state">measured live</span></summary>
+              <p>The output panel is fed by a TextStreamer in the worker. The latency readout is measured from the button press to generation completion.</p>
             </details>
             <details class="claim-row">
-              <summary><span class="claim-number">05</span><span class="claim-text"><b>Decentralized cluster of Bluetooth toothbrushes</b><small>That’s the compute fabric.</small></span><span class="claim-state">in the bathroom</span></summary>
-              <p>Peer-to-peer inference across nine nodes. One is offline because someone is brushing their teeth.</p>
+              <summary><span class="claim-number">05</span><span class="claim-text"><b>Weights cache in this browser</b><small>The first load is heavy; later visits reuse the cached files.</small></span><span class="claim-state">no backend</span></summary>
+              <p>The runtime uses the browser cache for model assets. Clear site data and the next visit will need to download them again.</p>
             </details>
           </div>
         </section>
@@ -190,10 +191,10 @@
 
       <footer class="site-footer">
         <p>CSS is Turing complete<span aria-hidden="true">*</span></p>
-        <span>* please do not deploy this model</span>
+        <span>* no backend required. model files download on first run.</span>
       </footer>
     </div>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
   </body>
 </html>
