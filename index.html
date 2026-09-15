@@ -4,14 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#d5d7df" />
-    <meta name="description" content="A real 135M-parameter small language model running locally in your browser." />
+    <meta name="description" content="A trained character-level language model compiled into CSS and evaluated by the browser style engine." />
     <link rel="canonical" href="https://ericspencer.us/css-llm/" />
-    <meta property="og:title" content="FWD/∞ — browser-local small language model" />
-    <meta property="og:description" content="A real 135M-parameter small language model running locally in your browser." />
+    <meta property="og:title" content="FWD/∞ — a language model in CSS" />
+    <meta property="og:description" content="A trained character-level language model compiled into CSS and evaluated by the browser style engine." />
     <meta property="og:url" content="https://ericspencer.us/css-llm/" />
     <meta property="og:type" content="website" />
-    <title>FWD/∞ — browser-local small language model</title>
+    <title>FWD/∞ — a language model in CSS</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="css-model.css?v=1" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -25,7 +26,7 @@
         <div class="header-title">CSS Model Default Page</div>
         <div class="header-status" aria-label="System status">
           <span class="status-light" aria-hidden="true"></span>
-          <span id="systemStatus">booting local model</span>
+          <span id="systemStatus">CSS style engine</span>
           <span class="status-separator" aria-hidden="true">/</span>
           <span>build 0.0.∞</span>
         </div>
@@ -36,24 +37,24 @@
         <section class="hero-grid" aria-labelledby="hero-title">
           <div class="hero-copy">
             <p class="eyebrow">Foundation model / field test 01</p>
-            <h1 id="hero-title">It runs locally. <br /><em>Actually.</em> <br />No server <span>required.</span></h1>
-            <p class="hero-lede">A real 135M-parameter small language model, loaded into this browser and executed on your hardware with WebGPU or WebAssembly.</p>
+            <h1 id="hero-title">It runs in CSS. <br /><em>Actually.</em> <br />No model <span>server.</span></h1>
+            <p class="hero-lede">A trained 32-unit character language model. Its weights and fixed autoregressive graph are serialized as typed CSS custom properties; the browser style engine evaluates the hard-tanh math.</p>
             <div class="hero-actions">
-              <button class="button button-primary" id="anticipateButton" type="button" disabled>Run local inference</button>
+              <button class="button button-primary" id="anticipateButton" type="button">Run CSS inference</button>
               <button class="button button-quiet" id="resetButton" type="button">Clear output</button>
             </div>
             <div class="claim-strip" aria-label="Model inputs">
-              <span><b>model</b> SmolLM2-135M-Instruct</span>
-              <span><b>weights</b> ONNX q4</span>
-              <span><b>inference</b> local</span>
+              <span><b>model</b> CSS-RNN-32</span>
+              <span><b>weights</b> css-model.css</span>
+              <span><b>inference</b> CSS</span>
             </div>
           </div>
 
           <div class="model-stage" aria-label="Live model visualization">
             <div class="stage-grid" aria-hidden="true"></div>
             <div class="stage-topline">
-              <span>Core / onnx.runtime</span>
-              <span class="stage-pill"><span class="status-light"></span> local only</span>
+              <span>Core / css.rnn</span>
+              <span class="stage-pill"><span class="status-light"></span> style engine only</span>
             </div>
             <div class="orbit-system" aria-hidden="true">
               <div class="orbit orbit-one"><i></i></div>
@@ -61,19 +62,19 @@
               <div class="orbit orbit-three"><i></i></div>
               <div class="core-ring"></div>
               <div class="core-disc">
-                <span class="core-label">SLM</span>
-                <strong>135M</strong>
-                <span class="core-foot">in browser</span>
+                <span class="core-label">RNN</span>
+                <strong>32</strong>
+                <span class="core-foot">hidden units</span>
               </div>
             </div>
             <div class="stage-readout">
               <p class="readout-label">Current inference</p>
-              <p id="stageStatus">loading the model into your browser.</p>
-              <p class="runtime-proof"><span id="runtimeValue">preparing runtime</span> · no inference server</p>
+              <p id="stageStatus">CSS model ready. type a seed and run it.</p>
+              <p class="runtime-proof"><span id="runtimeValue">typed CSS graph</span> · no JS neural ops</p>
               <div class="readout-meter" aria-hidden="true"><span id="stageMeter"></span></div>
             </div>
             <div class="stage-footline">
-              <span>stream updates: <b id="signalValue">0</b></span>
+              <span>generated chars: <b id="signalValue">0</b></span>
               <span>latency: <b id="stageLatency">not run</b></span>
             </div>
           </div>
@@ -84,27 +85,27 @@
             <div class="panel-topline">
               <span class="panel-index">01</span>
               <div>
-                <p class="panel-kicker">Browser inference</p>
+                <p class="panel-kicker">CSS inference</p>
                 <h2>Prediction window</h2>
               </div>
-              <span class="latency-badge" id="latencyBadge">local</span>
+              <span class="latency-badge" id="latencyBadge">CSS</span>
             </div>
-            <p class="panel-intro">Ask a real small language model. Your prompt stays in this tab.</p>
+            <p class="panel-intro">Seed a real character-level model. The prompt binds to CSS inputs; the model graph stays in the stylesheet.</p>
             <div class="prompt-lab">
               <label for="promptInput">Prompt signal</label>
               <div class="prompt-line">
                 <span aria-hidden="true">you@now:~$</span>
-                <input id="promptInput" type="text" maxlength="160" autocomplete="off" placeholder="ask the local model something" />
+                <input id="promptInput" type="text" maxlength="160" autocomplete="off" placeholder="seed the character model" />
               </div>
             </div>
             <div class="prediction-output" aria-live="polite">
-              <div class="output-topline"><span id="outputLabel">local model output</span><span class="output-light"></span></div>
-              <p id="predictedText">Loading the model. First run may take a minute.</p>
+              <div class="output-topline"><span id="outputLabel">CSS model output</span><span class="output-light"></span></div>
+              <p id="predictedText">CSS graph ready. Seed it with a phrase.</p>
               <span class="output-cursor" aria-hidden="true"></span>
             </div>
             <div class="panel-footline">
-              <span>model <b>SmolLM2 · 135M</b></span>
-              <span>stream updates <b id="tokenCount">0</b></span>
+              <span>model <b>CSS-RNN-32</b></span>
+              <span>generated chars <b id="tokenCount">0</b></span>
             </div>
           </div>
 
@@ -112,28 +113,28 @@
             <div class="panel-topline">
               <span class="panel-index">02</span>
               <div>
-                <p class="panel-kicker">Actual compute path</p>
-                <h2>Worker + WebGPU</h2>
+                <p class="panel-kicker">The actual compute path</p>
+                <h2>Typed CSS graph</h2>
               </div>
               <span class="cluster-count" id="clusterCount">07 / 09</span>
             </div>
-            <p class="panel-intro">The model runs in a dedicated worker. The toothbrushes are only a diagnostic metaphor.</p>
-            <div class="toothbrush-bus" id="toothbrushBus" aria-label="Nine toothbrush compute nodes">
+            <p class="panel-intro">Every recurrent step is expanded into custom properties: multiply, sum, hard-tanh, argmax, repeat. No worker or WASM is involved.</p>
+            <div class="toothbrush-bus" id="toothbrushBus" aria-label="Decorative CSS graph nodes">
               <span class="bus-line bus-line-a" aria-hidden="true"></span>
               <span class="bus-line bus-line-b" aria-hidden="true"></span>
-              <button class="toothbrush-node node-a" type="button" aria-label="Toothbrush node one, online"><i></i><b>B-01</b></button>
-              <button class="toothbrush-node node-b" type="button" aria-label="Toothbrush node two, online"><i></i><b>B-02</b></button>
-              <button class="toothbrush-node node-c" type="button" aria-label="Toothbrush node three, online"><i></i><b>B-03</b></button>
-              <button class="toothbrush-node node-d" type="button" aria-label="Toothbrush node four, online"><i></i><b>B-04</b></button>
-              <button class="toothbrush-node node-e" type="button" aria-label="Toothbrush node five, online"><i></i><b>B-05</b></button>
-              <button class="toothbrush-node node-f" type="button" aria-label="Toothbrush node six, online"><i></i><b>B-06</b></button>
-              <button class="toothbrush-node node-g" type="button" aria-label="Toothbrush node seven, online"><i></i><b>B-07</b></button>
-              <button class="toothbrush-node node-h" type="button" aria-label="Toothbrush node eight, offline"><i></i><b>B-08</b></button>
-              <button class="toothbrush-node node-i" type="button" aria-label="Toothbrush node nine, offline"><i></i><b>B-09</b></button>
+              <button class="toothbrush-node node-a" type="button" aria-label="CSS hidden-unit group one"><i></i><b>H-01</b></button>
+              <button class="toothbrush-node node-b" type="button" aria-label="CSS hidden-unit group two"><i></i><b>H-02</b></button>
+              <button class="toothbrush-node node-c" type="button" aria-label="CSS hidden-unit group three"><i></i><b>H-03</b></button>
+              <button class="toothbrush-node node-d" type="button" aria-label="CSS hidden-unit group four"><i></i><b>H-04</b></button>
+              <button class="toothbrush-node node-e" type="button" aria-label="CSS hidden-unit group five"><i></i><b>H-05</b></button>
+              <button class="toothbrush-node node-f" type="button" aria-label="CSS hidden-unit group six"><i></i><b>H-06</b></button>
+              <button class="toothbrush-node node-g" type="button" aria-label="CSS hidden-unit group seven"><i></i><b>H-07</b></button>
+              <button class="toothbrush-node node-h" type="button" aria-label="CSS hidden-unit group eight"><i></i><b>H-08</b></button>
+              <button class="toothbrush-node node-i" type="button" aria-label="CSS hidden-unit group nine"><i></i><b>H-09</b></button>
             </div>
             <div class="cluster-actions">
-              <button class="text-button" id="rerouteButton" type="button">Pulse the metaphor</button>
-              <span>runtime / <b id="clusterLoad">detecting</b></span>
+              <button class="text-button" id="rerouteButton" type="button">Pulse the graph</button>
+              <span>engine / <b id="clusterLoad">compiled</b></span>
             </div>
           </div>
 
@@ -146,14 +147,14 @@
               </div>
               <span class="recursion-tag">recursive</span>
             </div>
-            <div class="kerning-machine" aria-label="Model and runtime facts">
+            <div class="kerning-machine" aria-label="CSS neural graph facts">
               <div class="type-stack"><span>CSS</span><span>CSS</span><span>CSS</span><span>CSS</span><span>CSS</span></div>
-              <div class="equation"><code>model: SmolLM2-135M</code><span>+</span><code>runtime: ONNX</code><span>=</span><strong id="recursionValue">local</strong></div>
+              <div class="equation"><code>weights: CSS</code><span>+</span><code>ops: calc + clamp</code><span>=</span><strong id="recursionValue">computed</strong></div>
               <div class="kerning-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
             </div>
             <div class="panel-footline">
-              <span>inference <b>worker</b></span>
-              <span>device <b id="stackDepth">detecting</b></span>
+              <span>graph <b>fixed-shape</b></span>
+              <span>rollout <b id="stackDepth">64 steps</b></span>
             </div>
           </div>
         </section>
@@ -161,29 +162,29 @@
         <section class="claims-section" aria-labelledby="claims-title">
           <div class="claims-heading">
             <p class="eyebrow">The intern assignment</p>
-            <h2 id="claims-title">Five facts. One real model.</h2>
+            <h2 id="claims-title">Five facts. One CSS model.</h2>
             <p>Tap a row to inspect what is actually happening.</p>
           </div>
           <div class="claims-list">
             <details class="claim-row">
-              <summary><span class="claim-number">01</span><span class="claim-text"><b>SmolLM2-135M-Instruct</b><small>A 135M-parameter text-generation model from Hugging Face.</small></span><span class="claim-state">real weights</span></summary>
-              <p>This page uses the ONNX export of SmolLM2-135M-Instruct through Transformers.js. It is a text-only small language model, not a multimodal one.</p>
+              <summary><span class="claim-number">01</span><span class="claim-text"><b>CSS-RNN-32</b><small>32 hidden units and a 32-character vocabulary.</small></span><span class="claim-state">trained weights</span></summary>
+              <p>This is a trained character-level recurrent language model, not a lookup table. It predicts the next character from the previous hidden state and character.</p>
             </details>
             <details class="claim-row">
-              <summary><span class="claim-number">02</span><span class="claim-text"><b>Runs on your hardware</b><small>WebGPU when available, WebAssembly when it is not.</small></span><span class="claim-state">browser-local</span></summary>
-              <p>The browser downloads the model files from the Hugging Face Hub, then executes generation locally in a worker. No prompt is sent to an inference API.</p>
+              <summary><span class="claim-number">02</span><span class="claim-text"><b>Weights are CSS</b><small>Float32 weights are numeric literals inside css-model.css.</small></span><span class="claim-state">CSS payload</span></summary>
+              <p>The stylesheet contains the learned matrices and biases as operands in CSS custom-property declarations. There is no model download or runtime library.</p>
             </details>
             <details class="claim-row">
-              <summary><span class="claim-number">03</span><span class="claim-text"><b>ONNX Runtime Web</b><small>Transformers.js runs the exported model in the browser.</small></span><span class="claim-state">actual runtime</span></summary>
-              <p>CSS is presentation here. The model execution is performed by ONNX Runtime Web, selected by Transformers.js.</p>
+              <summary><span class="claim-number">03</span><span class="claim-text"><b>Style engine inference</b><small>CSS custom properties carry the neural dataflow.</small></span><span class="claim-state">actual runtime</span></summary>
+              <p>A hidden engine element carries typed numeric properties. The browser resolves sums, hard-tanh activations, comparisons, argmax, and recurrent dependencies as computed style.</p>
             </details>
             <details class="claim-row">
-              <summary><span class="claim-number">04</span><span class="claim-text"><b>Streaming output</b><small>Generated tokens appear as the model produces them.</small></span><span class="claim-state">measured live</span></summary>
-              <p>The output panel is fed by a TextStreamer in the worker. The latency readout is measured from the button press to generation completion.</p>
+              <summary><span class="claim-number">04</span><span class="claim-text"><b>Fixed-shape autoregression</b><small>24 seed characters become 64 greedy generated characters.</small></span><span class="claim-state">unrolled graph</span></summary>
+              <p>The graph is finite because CSS needs a fixed topology. Each generated argmax becomes the next one-hot input, so the rollout is model recurrence rather than a canned answer.</p>
             </details>
             <details class="claim-row">
-              <summary><span class="claim-number">05</span><span class="claim-text"><b>Weights cache in this browser</b><small>The first load is heavy; later visits reuse the cached files.</small></span><span class="claim-state">no backend</span></summary>
-              <p>The runtime uses the browser cache for model assets. Clear site data and the next visit will need to download them again.</p>
+              <summary><span class="claim-number">05</span><span class="claim-text"><b>JavaScript is I/O only</b><small>It binds the seed and reads computed character ids.</small></span><span class="claim-state">bridge only</span></summary>
+              <p>JavaScript does not hold the weights or perform matrix math. It maps typed characters to CSS input properties and maps the CSS output properties back to displayable characters.</p>
             </details>
           </div>
         </section>
@@ -191,10 +192,11 @@
 
       <footer class="site-footer">
         <p>CSS is Turing complete<span aria-hidden="true">*</span></p>
-        <span>* no backend required. model files download on first run.</span>
+        <span>* no backend. css-model.css contains the model.</span>
       </footer>
     </div>
 
-    <script type="module" src="script.js?v=2"></script>
+    <div class="css-rnn-engine" data-css-rnn-engine aria-hidden="true"></div>
+    <script type="module" src="script.js?v=css1"></script>
   </body>
 </html>

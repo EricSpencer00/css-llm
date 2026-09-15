@@ -1,6 +1,6 @@
 # CSS Foundation Toy
 
-An intentionally plain-looking page that runs a real small language model in the browser. It uses the ONNX export of `onnx-community/SmolLM2-135M-Instruct-ONNX-MHA` with Transformers.js. WebGPU is used when available; WebAssembly is the fallback. There is no inference backend or build step.
+An intentionally plain-looking page that runs a trained character-level language model in CSS. `css-model.css` contains the learned weights and a fixed 24-character-seed, 64-character autoregressive graph. The browser style engine evaluates the matrix multiplies, hard-tanh activation, argmax, and recurrence. There is no inference backend, WASM, ONNX runtime, or model download.
 
 Live site: <https://ericspencer.us/css-llm/>
 
@@ -12,7 +12,16 @@ python3 -m http.server 4175
 
 Then open <http://127.0.0.1:4175/>.
 
-The first visit downloads the model and tokenizer files from the Hugging Face Hub. Transformers.js caches them in the browser, so later visits can run without downloading them again. The prompt and generation stay in the browser tab.
+The model is a 32-unit character RNN trained on a 1 MB TinyStories text slice. JavaScript is only the I/O bridge: it writes one-hot seed characters to custom properties and reads the generated character ids back from `getComputedStyle()`. It does not perform inference.
+
+Regenerate the model and stylesheet with:
+
+```sh
+python3 tools/train_css_rnn.py \
+  --corpus /path/to/TinyStories-valid.txt \
+  --weights model/weights.json \
+  --css css-model.css
+```
 
 ## Deployment
 

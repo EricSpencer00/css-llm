@@ -10,7 +10,7 @@ People who encounter the “intern assignment” reel and want a quick, tactile 
 
 ## Product Purpose
 
-This is a single-screen interactive demo for an impossible foundation model. It turns the reel’s claims into a fake instrument panel: users can feed it a prompt, watch the system predict backwards, inspect its CSS-powered machinery, and see the toothbrush cluster respond. Success means the interaction lands as a visual punchline, not as a serious AI product.
+This is a single-screen interactive demo for a genuinely CSS-executed small language model. Users seed a character-level recurrent network, watch the browser style engine resolve its fixed autoregressive graph, and inspect the generated stylesheet. Success means the page makes the unusual implementation legible without pretending that JavaScript or a backend is doing the neural work.
 
 ## Brand Personality
 
@@ -26,7 +26,7 @@ Avoid the usual polished AI landing page: no gradient hero, floating glass cards
 - Treat each impossible claim as a live system readout.
 - Use real interaction to reward curiosity: typing and toggling should change the instrument.
 - Keep the surface dense enough to feel engineered, but give the main joke room to breathe.
-- Let the interface admit that it is a toy.
+- Let the interface admit that it is a tiny, fixed-shape model.
 
 ## Accessibility & Inclusion
 
