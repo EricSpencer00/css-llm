@@ -88,15 +88,15 @@ async function bootModel() {
   retryButton.hidden = true;
   setScreen('boot');
   bootSteps.forEach((step) => step.classList.remove('is-done'));
-  footerState.textContent = 'loading css graph';
+  footerState.textContent = 'loading';
   setBootProgress(8);
-  bootStatus.textContent = 'Checking the stylesheet.';
+  bootStatus.textContent = 'checking css-model.css';
 
   try {
     await delay(180);
     const ruleCount = verifyCSSGraph();
     markBootStep(0);
-    bootStatus.textContent = `css-model.css loaded · ${ruleCount.toLocaleString()} rules`;
+    bootStatus.textContent = `css-model.css · ${ruleCount.toLocaleString()} rules`;
     setBootProgress(36);
 
     await delay(240);
@@ -104,13 +104,13 @@ async function bootModel() {
     const hiddenState = Number.parseFloat(getComputedStyle(engine).getPropertyValue('--css-rnn-prompt-hidden-0-0'));
     if (!Number.isFinite(hiddenState)) throw new Error('typed properties did not resolve');
     markBootStep(1);
-    bootStatus.textContent = 'Typed numeric properties resolved.';
+    bootStatus.textContent = 'numeric properties resolved';
     setBootProgress(68);
 
     await delay(260);
     verifyCSSGraph();
     markBootStep(2);
-    bootStatus.textContent = 'Recurrent graph ready.';
+    bootStatus.textContent = 'recurrent graph ready';
     setBootProgress(100);
 
     await delay(320);
@@ -118,13 +118,13 @@ async function bootModel() {
     booting = false;
     setScreen('app');
     systemStatus.textContent = 'style engine ready';
-    footerState.textContent = 'local / css / no backend';
+    footerState.textContent = 'ready';
     promptInput.focus();
   } catch (error) {
     booting = false;
     setBootProgress(0);
-    bootStatus.textContent = `Could not start the CSS graph: ${error instanceof Error ? error.message : String(error)}`;
-    footerState.textContent = 'css graph error';
+    bootStatus.textContent = 'error';
+    footerState.textContent = 'error';
     retryButton.hidden = false;
     retryButton.focus();
   }
@@ -161,9 +161,9 @@ async function runPrediction(event) {
   runButton.disabled = true;
   latencyBadge.textContent = 'running';
   stageLatency.textContent = 'running';
-  stageStatus.textContent = 'resolving recurrent math in the CSS style engine.';
+  stageStatus.textContent = 'running CSS';
   systemStatus.textContent = 'CSS inference';
-  outputLabel.textContent = 'model output';
+  outputLabel.textContent = 'next characters';
   predictedText.textContent = '';
 
   try {
@@ -175,13 +175,13 @@ async function runPrediction(event) {
     latencyBadge.textContent = `${latency}ms`;
     stageLatency.textContent = `${latency}ms`;
     tokenCount.textContent = String(generated.length);
-    stageStatus.textContent = `complete · ${generated.length} characters · neural ops computed by CSS.`;
+    stageStatus.textContent = 'ready';
     systemStatus.textContent = 'style engine ready';
   } catch (error) {
-    predictedText.textContent = `The CSS model could not resolve: ${error instanceof Error ? error.message : String(error)}`;
+    predictedText.textContent = 'error';
     latencyBadge.textContent = 'error';
     stageLatency.textContent = 'error';
-    stageStatus.textContent = 'CSS graph error.';
+    stageStatus.textContent = 'error';
     systemStatus.textContent = 'CSS error';
   } finally {
     runButton.disabled = false;
@@ -194,9 +194,7 @@ promptForm.addEventListener('submit', runPrediction);
 
 promptInput.addEventListener('input', () => {
   if (!modelReady) return;
-  stageStatus.textContent = cleanPrompt(promptInput.value)
-    ? 'Seed staged. Run the CSS graph when ready.'
-    : 'Ready. Type a seed and run the graph.';
+  stageStatus.textContent = cleanPrompt(promptInput.value) ? 'staged' : 'ready';
 });
 
 bindPrompt('');

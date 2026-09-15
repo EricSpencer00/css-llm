@@ -28,26 +28,24 @@
       <main id="top">
         <section class="screen gate-screen" id="gateScreen" aria-labelledby="gateTitle">
           <div class="screen-copy">
-            <p class="screen-kicker">local / css / no backend</p>
-            <h1 id="gateTitle">It runs in CSS.<br /><em>Actually.</em></h1>
-            <p class="screen-intro">A small language model compiled into one stylesheet. The browser does the neural math.</p>
+            <p class="screen-kicker">CSS-RNN-32</p>
+            <h1 id="gateTitle">A trained language model runs in your browser as a CSS file.</h1>
             <button class="enter-button" id="enterButton" type="button">enter</button>
-            <p class="screen-note">32 hidden units · 32 characters · 64 generated steps</p>
           </div>
         </section>
 
         <section class="screen boot-screen" id="bootScreen" aria-labelledby="bootTitle" hidden>
           <div class="screen-copy">
-            <p class="screen-kicker">boot sequence / css style engine</p>
-            <h1 id="bootTitle">Loading the model.</h1>
-            <p class="screen-intro" id="bootStatus" aria-live="polite">Checking the stylesheet.</p>
+            <p class="screen-kicker">CSS-RNN-32</p>
+            <h1 id="bootTitle">The browser is loading the CSS graph.</h1>
+            <p class="screen-intro" id="bootStatus" aria-live="polite">checking css-model.css</p>
             <div class="boot-progress" role="progressbar" aria-label="Loading CSS model" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <span id="bootMeter"></span>
             </div>
             <ol class="boot-log" aria-label="CSS model boot steps">
               <li id="bootStepStylesheet">load css-model.css</li>
-              <li id="bootStepProperties">resolve typed properties</li>
-              <li id="bootStepGraph">check recurrent graph</li>
+              <li id="bootStepProperties">resolve numeric properties</li>
+              <li id="bootStepGraph">check 64-step graph</li>
             </ol>
             <button class="enter-button boot-retry" id="retryButton" type="button" hidden>retry</button>
           </div>
@@ -56,19 +54,19 @@
         <section class="screen app-screen" id="appScreen" aria-labelledby="appTitle" hidden>
           <div class="app-heading">
             <div>
-              <p class="screen-kicker">CSS inference</p>
-              <h1 id="appTitle">Give it a beginning.</h1>
+              <p class="screen-kicker">CSS-RNN-32</p>
+              <h1 id="appTitle">Start with a phrase.</h1>
             </div>
             <span class="app-state"><i aria-hidden="true"></i><span id="systemStatus">style engine ready</span></span>
           </div>
 
           <div class="prediction-output" aria-live="polite" aria-atomic="true">
-            <div class="output-label"><span id="outputLabel">model output</span><span id="latencyBadge">CSS</span></div>
-            <p id="predictedText">The model will continue your seed here.</p>
+            <div class="output-label"><span id="outputLabel">next characters</span><span id="latencyBadge">CSS</span></div>
+            <p id="predictedText" aria-label="Generated text"></p>
           </div>
 
           <form class="prompt-form" id="promptForm">
-            <label for="promptInput"><span>seed input</span><small>24 characters max</small></label>
+            <label for="promptInput"><span>starting text</span><small>24 characters max</small></label>
             <div class="prompt-line">
               <span aria-hidden="true">you@css:~$</span>
               <input id="promptInput" type="text" maxlength="24" autocomplete="off" placeholder="once upon a time" />
@@ -77,21 +75,16 @@
           </form>
 
           <div class="app-status" aria-live="polite">
-            <span id="stageStatus">Ready. Type a seed and run the graph.</span>
+            <span id="stageStatus">ready</span>
             <span><b id="tokenCount">0</b> chars · <b id="stageLatency">not run</b></span>
           </div>
 
-          <details class="about-model">
-            <summary>what is actually running</summary>
-            <p>CSS-RNN-32 is a trained character-level recurrent model. Its weights, hard-tanh activation, argmax, and 64-step recurrence live in <code>css-model.css</code>.</p>
-            <p>JavaScript only writes the seed into typed CSS properties and reads the computed character ids back. There is no server, worker, WASM, or model download.</p>
-          </details>
         </section>
       </main>
 
       <footer class="site-footer">
-        <span id="footerState">not entered</span>
-        <span>the model is the stylesheet</span>
+        <span id="footerState">idle</span>
+        <span>css-model.css</span>
       </footer>
     </div>
 
