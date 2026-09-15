@@ -18,7 +18,7 @@ const anticipateButton = document.querySelector('#anticipateButton');
 
 const nodes = [...document.querySelectorAll('.toothbrush-node')];
 const examplePrompt = 'Explain in one sentence why CSS is Turing complete.';
-const modelWorker = new Worker('./model-worker.js', { type: 'module' });
+const modelWorker = new Worker('./model-worker.js?v=2', { type: 'module' });
 let hasInteracted = false;
 let modelReady = false;
 let modelLoading = false;
