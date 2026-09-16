@@ -11,7 +11,9 @@ the input, writes one-hot prompt characters, and reads numeric output ids from
 WASM module, ONNX runtime, model download, or external runtime dependency.
 
 The model uses signed 4-bit input weights and signed 8-bit recurrent/output
-weights, trained with quantization-aware forward passes. Its supervised corpus
+weights, trained with quantization-aware forward passes. An optional build-time
+TinyStories teacher supplies additional language signal; it is not downloaded
+by the browser. Its supervised corpus
 uses `user:` and `assistant:` turns, so the fixed graph is optimized for short
 conversational replies and compact code sketches. A closed lowercase
 English/code vocabulary, whitespace guard, repetition penalty, and output
@@ -48,8 +50,12 @@ python3 tools/train_css_rnn.py \
   --corpus model/training_corpus.txt \
   --examples model/supervised.jsonl \
   --weights model/weights.json \
-  --css css-model.css
+  --css css-model.css \
+  --hf-repo roneneldan/TinyStories-Instruct-1M
 ```
+
+The instruction-tuned checkpoint is used only while training and is quantized
+before distillation; the checked-in runtime remains a self-contained CSS file.
 
 Training uses NumPy. The browser-side model remains plain CSS, and the
 regression checks can be run with:

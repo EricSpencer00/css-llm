@@ -12,6 +12,8 @@
 - decoder: CSS greedy argmax with whitespace and repetition constraints
 
 The JSON records the corpus hash, training seed, step count, validation loss,
-and quantization scheme. The stylesheet is the browser runtime form of those
+and quantization scheme. Teacher-distilled builds also record the build-only
+TinyStories-Instruct checkpoint; no teacher files are needed at runtime. The stylesheet
+is the browser runtime form of those
 weights: it contains the unrolled recurrent graph, numeric operands, argmax
 masks, and final output registers. JavaScript is only the I/O bridge.

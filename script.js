@@ -117,7 +117,7 @@ async function bootModel() {
     await delay(180);
     const ruleCount = verifyCSSGraph();
     markBootStep(0);
-    bootStatus.textContent = `q4 css-model.css · ${ruleCount.toLocaleString()} rules`;
+    bootStatus.textContent = `q4/q8 css-model.css · ${ruleCount.toLocaleString()} rules`;
     setBootProgress(36);
 
     await delay(240);
@@ -221,6 +221,11 @@ function stableEnglishResponse(text) {
   if (!validEnglishTokenStream(text)) return false;
   const words = text.match(/[a-z]{2,}/g) || [];
   if (words.length < 2) return false;
+  if (/[{}]/.test(text)) {
+    const balancedRule = /^[^{]+\{[^{}]*\}\s*$/;
+    const declaration = /[a-z-]+\s*:\s*[^;{}]+;/;
+    if (!balancedRule.test(text) || !declaration.test(text)) return false;
+  }
   return !/(.{2,12})\1\1/.test(text.replace(/\s+/g, ' '));
 }
 
