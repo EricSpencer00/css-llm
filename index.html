@@ -4,15 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#d5d7df" />
-    <meta name="description" content="A 32-unit character model compiled into CSS and evaluated by the browser style engine." />
+    <meta name="description" content="A quantized conversational character model compiled into CSS and evaluated by the browser style engine." />
     <link rel="canonical" href="https://ericspencer.us/css-llm/" />
-    <meta property="og:title" content="FWD/∞ — a character model in CSS" />
-    <meta property="og:description" content="A 32-unit character model compiled into CSS and evaluated by the browser style engine." />
+    <meta property="og:title" content="FWD/∞ — conversational AI in CSS" />
+    <meta property="og:description" content="A quantized conversational character model compiled into CSS and evaluated by the browser style engine." />
     <meta property="og:url" content="https://ericspencer.us/css-llm/" />
     <meta property="og:type" content="website" />
     <title>FWD/∞ — a character model in CSS</title>
     <link rel="stylesheet" href="styles.css?v=2" />
-    <link rel="stylesheet" href="css-model.css?v=3" />
+    <link rel="stylesheet" href="css-model.css?v=4" />
   </head>
   <body class="is-gate">
     <div class="page-shell">
@@ -21,53 +21,66 @@
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>fwd/∞</span>
         </a>
-        <div class="header-title">CSS character model</div>
-        <div class="header-model">CSS-RNN-32</div>
+        <div class="header-title">CSS conversational model</div>
+        <div class="header-model">CSS-RNN-32 · Q4</div>
       </header>
 
       <main id="top">
         <section class="screen gate-screen" id="gateScreen" aria-labelledby="gateTitle">
           <div class="screen-copy">
-            <p class="screen-kicker">CSS-RNN-32</p>
-            <h1 id="gateTitle">A 32-unit character model runs in your browser as a CSS file.</h1>
+            <p class="screen-kicker">CSS-RNN-32 · Q4</p>
+            <h1 id="gateTitle">A quantized conversational model runs in your browser as a CSS file.</h1>
             <button class="enter-button" id="enterButton" type="button">enter</button>
           </div>
         </section>
 
         <section class="screen boot-screen" id="bootScreen" aria-labelledby="bootTitle" hidden>
           <div class="screen-copy">
-            <p class="screen-kicker">CSS-RNN-32</p>
-            <h1 id="bootTitle">The browser is loading the CSS graph.</h1>
+            <p class="screen-kicker">CSS-RNN-32 · Q4</p>
+            <h1 id="bootTitle">The browser is loading the quantized CSS graph.</h1>
             <p class="screen-intro" id="bootStatus" aria-live="polite">checking css-model.css</p>
             <div class="boot-progress" role="progressbar" aria-label="Loading CSS model" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <span id="bootMeter"></span>
             </div>
             <ol class="boot-log" aria-label="CSS model boot steps">
-              <li id="bootStepStylesheet">load css-model.css</li>
-              <li id="bootStepProperties">resolve numeric properties</li>
-              <li id="bootStepGraph">check 64-step graph</li>
+              <li id="bootStepStylesheet">load quantized stylesheet</li>
+              <li id="bootStepProperties">resolve 64-character context</li>
+              <li id="bootStepGraph">check 96-step graph</li>
             </ol>
             <button class="enter-button boot-retry" id="retryButton" type="button" hidden>retry</button>
           </div>
         </section>
 
-        <section class="screen app-screen" id="appScreen" aria-label="CSS-RNN-32" hidden>
+        <section class="screen app-screen" id="appScreen" aria-label="CSS-RNN-32 conversational model" hidden>
+          <div class="conversation-log" id="conversationLog" aria-live="polite" aria-label="Conversation">
+            <p class="conversation-empty" id="conversationEmpty">Ask a question. The little recurrent graph will answer in lowercase English, and it knows a few code-shaped noises too.</p>
+          </div>
+
           <div class="prediction-output" aria-live="polite" aria-atomic="true">
-            <div class="output-label"><span id="outputLabel">next characters</span><span id="latencyBadge">CSS</span></div>
-            <p id="predictedText" aria-label="Generated text"></p>
+            <div class="output-label"><span id="outputLabel">assistant · ready</span><span id="latencyBadge">CSS</span></div>
+            <pre id="predictedText" aria-label="Generated response"></pre>
           </div>
 
           <form class="prompt-form" id="promptForm">
-            <label for="promptInput"><span>starting text</span><small>24 characters max</small></label>
+            <label for="promptInput"><span>message</span><small>72 chars · lowercase English/code</small></label>
             <div class="prompt-line">
               <span aria-hidden="true">you@css:~$</span>
-              <input id="promptInput" type="text" maxlength="24" autocomplete="off" placeholder="once upon a time" />
-              <button class="run-button" id="runButton" type="submit">run</button>
+              <input id="promptInput" type="text" maxlength="72" autocomplete="off" placeholder="explain flexbox" />
+              <button class="run-button" id="runButton" type="submit">ask</button>
             </div>
           </form>
 
+          <div class="starter-row" aria-label="Starter prompts">
+            <span>try</span>
+            <button type="button" data-starter="what can you do?">what can you do?</button>
+            <button type="button" data-starter="write a css button">write a css button</button>
+            <button type="button" data-starter="why is the sky blue?">why is the sky blue?</button>
+            <button class="clear-button" id="clearButton" type="button">clear</button>
+          </div>
+
           <div class="app-status" aria-live="polite">
             <span><b id="tokenCount">0</b> chars · <b id="stageLatency">not run</b></span>
+            <span>weights <b>q4</b> · inference <b>CSS</b></span>
           </div>
 
         </section>
@@ -79,6 +92,6 @@
     </div>
 
     <div class="css-rnn-engine" data-css-rnn-engine aria-hidden="true"></div>
-    <script type="module" src="script.js?v=css4"></script>
+    <script type="module" src="script.js?v=css5"></script>
   </body>
 </html>

@@ -269,9 +269,63 @@ a:focus-visible {
   padding-bottom: 34px;
 }
 
+.conversation-log {
+  display: grid;
+  gap: 0;
+  max-height: 295px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  background: var(--soft);
+  scrollbar-color: var(--blue) transparent;
+}
+
+.conversation-empty {
+  margin: 0;
+  padding: 14px 9px 16px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.conversation-turn {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 9px 11px;
+  border-top: 1px solid color-mix(in oklch, var(--rule), transparent 35%);
+}
+
+.conversation-turn:first-of-type {
+  border-top: 0;
+}
+
+.conversation-turn-user {
+  background: var(--page);
+}
+
+.conversation-turn-assistant {
+  background: var(--soft);
+}
+
+.turn-role {
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: lowercase;
+}
+
+.conversation-turn p {
+  min-width: 0;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .prediction-output {
   min-height: 132px;
-  margin-top: 0;
+  margin-top: 12px;
   padding: 8px;
   border: 1px solid var(--rule);
   background: var(--soft);
@@ -297,12 +351,13 @@ a:focus-visible {
   font-weight: 700;
 }
 
-.prediction-output p {
+.prediction-output pre {
   max-width: 64ch;
   margin: 15px 0 0;
   color: var(--ink);
   font-size: 20px;
   line-height: 1.05;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
@@ -360,6 +415,42 @@ a:focus-visible {
   border-width: 0 0 0 1px;
   padding: 0 9px;
   font-size: 13px;
+}
+
+.starter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.starter-row button {
+  border: 1px solid color-mix(in oklch, var(--rule), transparent 35%);
+  padding: 4px 6px;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.starter-row button:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.starter-row button:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.starter-row .clear-button {
+  margin-left: auto;
+  color: var(--muted);
 }
 
 .app-status {
@@ -448,6 +539,15 @@ body.is-ready .site-footer span:first-child {
 
   .app-status {
     display: block;
+  }
+
+  .conversation-turn {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .starter-row .clear-button {
+    margin-left: 0;
   }
 
   .app-status > span:last-child {
