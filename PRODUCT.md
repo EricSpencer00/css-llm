@@ -10,7 +10,7 @@ People who encounter the “intern assignment” reel and want a quick, tactile 
 
 ## Product Purpose
 
-This is a single-screen interactive demo for a genuinely CSS-executed small language model. Users seed a character-level recurrent network, watch the browser style engine resolve its fixed autoregressive graph, and inspect the generated stylesheet. Success means the page makes the unusual implementation legible without pretending that JavaScript or a backend is doing the neural work.
+This is a single-screen interactive demo for a genuinely CSS-executed small language model. Users seed a character-level recurrent network, watch the browser style engine resolve its fixed recurrent graph, and inspect the generated stylesheet. Success means the page makes the unusual implementation legible without pretending that JavaScript or a backend is doing the neural work.
 
 ## Brand Personality
 

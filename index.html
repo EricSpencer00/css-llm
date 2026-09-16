@@ -53,7 +53,7 @@
 
         <section class="screen app-screen" id="appScreen" aria-label="CSS-RNN-32 conversational model" hidden>
           <div class="conversation-log" id="conversationLog" aria-live="polite" aria-label="Conversation">
-            <p class="conversation-empty" id="conversationEmpty">Ask a question. The little recurrent graph will answer in lowercase English, and it knows a few code-shaped noises too.</p>
+            <p class="conversation-empty" id="conversationEmpty">Ask a question. The recurrent graph encodes your prompt and replies in lowercase English.</p>
           </div>
 
           <div class="prediction-output" aria-live="polite" aria-atomic="true">
@@ -80,7 +80,7 @@
 
           <div class="app-status" aria-live="polite">
             <span><b id="tokenCount">0</b> chars · <b id="stageLatency">not run</b></span>
-            <span>weights <b>q4</b> · inference <b>CSS</b></span>
+            <span>weights <b>q4/q8</b> · inference <b>CSS</b></span>
           </div>
 
         </section>

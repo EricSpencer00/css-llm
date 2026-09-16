@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """Train and compile a small conversational character RNN into CSS.
 
-The browser is the inference runtime. JavaScript may bind prompt characters
-and read output ids, but every embedding lookup, matrix multiply, activation,
-argmax, and recurrent step is lowered into typed CSS custom properties.
+The browser is the inference runtime. JavaScript may bind one-hot prompt
+characters and read output ids, but every embedding lookup, matrix multiply,
+activation, argmax, and recurrent step is lowered into typed CSS custom
+properties.
 
-The export uses aggressive weight-only quantization:
-
-* every learned matrix is stored as signed 4-bit weights with a per-output-channel
-  scale, while biases use signed 8-bit values.
-
-This is real weight-only quantization, not a rounded copy of the original
-JSON. The generated stylesheet consumes the quantized matrices and scales.
+The export uses aggressive weight-only quantization: the input projection is
+stored at signed four bits, recurrent and output matrices at signed eight
+bits, and biases at signed eight bits. The generated stylesheet consumes the
+quantized matrices and scales directly.
 """
 
 from __future__ import annotations
@@ -36,15 +34,18 @@ PROMPT_STEPS = 64
 GENERATED_STEPS = 96
 TRAIN_SEQUENCE_LENGTH = 128
 SUPERVISED_TARGET_STEPS = 64
+
+# The input projection is aggressively quantized; recurrent and output
+# matrices keep eight bits so the tiny model retains useful state and logits.
 QUANTIZATION_BITS = 4
 RECURRENT_BITS = 8
 OUTPUT_BITS = 8
 BIAS_BITS = 8
-TIE_BREAK = 1e-6
 SPACE_INDEX = CHARS.index(" ")
 NEWLINE_INDEX = CHARS.index("\n")
 REPETITION_WINDOW = 16
-REPETITION_PENALTY = 0.18
+REPETITION_PENALTY = 0.22
+TIE_BREAK = 1e-6
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,24 +62,23 @@ def parse_args() -> argparse.Namespace:
 
 
 def normalize(text: str) -> np.ndarray:
-    """Map the corpus into the closed lowercase English/code vocabulary."""
+    """Map input to lowercase characters in the closed runtime vocabulary."""
 
     text = text.replace("<|endoftext|>", " ")
     text = text.replace("\r\n", "\n").replace("\r", "\n").lower()
     lookup = {character: index for index, character in enumerate(CHARS)}
-    space = lookup[" "]
-    return np.array([lookup.get(character, space) for character in text], dtype=np.int64)
+    return np.array([lookup.get(character, lookup[" "]) for character in text], dtype=np.int64)
 
 
 def initialise(rng: np.random.Generator) -> dict[str, np.ndarray]:
     """Initialize an RNN with an orthogonal recurrent core."""
 
-    hidden_scale = 1.0 / math.sqrt(HIDDEN_SIZE)
     recurrent_seed = rng.normal(0, 1, (HIDDEN_SIZE, HIDDEN_SIZE))
-    q, _ = np.linalg.qr(recurrent_seed)
+    orthogonal, _ = np.linalg.qr(recurrent_seed)
+    hidden_scale = 1.0 / math.sqrt(HIDDEN_SIZE)
     return {
         "wxh": rng.normal(0, hidden_scale, (VOCAB_SIZE, HIDDEN_SIZE)).astype(np.float32),
-        "whh": (q * 0.88).astype(np.float32),
+        "whh": (orthogonal * 0.88).astype(np.float32),
         "bh": np.zeros(HIDDEN_SIZE, dtype=np.float32),
         "why": rng.normal(0, hidden_scale, (HIDDEN_SIZE, VOCAB_SIZE)).astype(np.float32),
         "by": np.zeros(VOCAB_SIZE, dtype=np.float32),
@@ -86,12 +86,22 @@ def initialise(rng: np.random.Generator) -> dict[str, np.ndarray]:
 
 
 def fake_quantize(values: np.ndarray, bits: int) -> np.ndarray:
-    """Quantize and immediately dequantize with a straight-through gradient."""
+    """Quantize during the forward pass and use a straight-through gradient."""
 
     qmax = (1 << (bits - 1)) - 1
     scales = np.max(np.abs(values), axis=0, keepdims=True) / qmax
     scales = np.where(scales > 0, scales, 1.0)
     return np.rint(values / scales).clip(-qmax - 1, qmax) * scales
+
+
+def runtime_parameters(model: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return {
+        "wxh": fake_quantize(model["wxh"], QUANTIZATION_BITS),
+        "whh": fake_quantize(model["whh"], RECURRENT_BITS),
+        "bh": fake_quantize(model["bh"], BIAS_BITS),
+        "why": fake_quantize(model["why"], OUTPUT_BITS),
+        "by": fake_quantize(model["by"], BIAS_BITS),
+    }
 
 
 def loss_and_gradients(
@@ -100,15 +110,11 @@ def loss_and_gradients(
     targets: np.ndarray,
     loss_mask: np.ndarray | None = None,
 ) -> tuple[float, dict[str, np.ndarray]]:
+    """Run quantization-aware teacher forcing and backpropagation through time."""
+
     batch_size, sequence_length = inputs.shape
-    runtime_model = {
-        "wxh": fake_quantize(model["wxh"], QUANTIZATION_BITS),
-        "whh": fake_quantize(model["whh"], RECURRENT_BITS),
-        "bh": fake_quantize(model["bh"], BIAS_BITS),
-        "why": fake_quantize(model["why"], OUTPUT_BITS),
-        "by": fake_quantize(model["by"], BIAS_BITS),
-    }
-    wxh, whh, bh, why, by = (runtime_model[name] for name in ("wxh", "whh", "bh", "why", "by"))
+    runtime = runtime_parameters(model)
+    wxh, whh, bh, why, by = (runtime[name] for name in ("wxh", "whh", "bh", "why", "by"))
 
     hidden = np.zeros((sequence_length + 1, batch_size, HIDDEN_SIZE), dtype=np.float32)
     logits = np.zeros((sequence_length, batch_size, VOCAB_SIZE), dtype=np.float32)
@@ -130,15 +136,14 @@ def loss_and_gradients(
 
     gradients = {name: np.zeros_like(value) for name, value in model.items()}
     d_hidden_next = np.zeros((batch_size, HIDDEN_SIZE), dtype=np.float32)
-    normalizer = mask_total
-
     for step in range(sequence_length - 1, -1, -1):
         d_logits = probabilities[step].copy()
         d_logits[np.arange(batch_size), targets[:, step]] -= 1
         d_logits *= mask[:, step, None]
-        d_logits /= normalizer
+        d_logits /= mask_total
         gradients["why"] += hidden[step + 1].T @ d_logits
         gradients["by"] += d_logits.sum(axis=0)
+
         d_hidden = d_logits @ why.T + d_hidden_next
         d_pre_activation = d_hidden * (np.abs(hidden[step + 1]) < 1)
         gradients["bh"] += d_pre_activation.sum(axis=0)
@@ -147,6 +152,35 @@ def loss_and_gradients(
         d_hidden_next = d_pre_activation @ whh.T
 
     return float(loss), gradients
+
+
+def adam_step(
+    model: dict[str, np.ndarray],
+    gradients: dict[str, np.ndarray],
+    moments: dict[str, np.ndarray],
+    velocities: dict[str, np.ndarray],
+    step: int,
+    learning_rate: float,
+) -> None:
+    norm = math.sqrt(sum(float(np.sum(gradient * gradient)) for gradient in gradients.values()))
+    if norm > 5:
+        for gradient in gradients.values():
+            gradient *= 5 / norm
+
+    beta1, beta2, epsilon = 0.9, 0.999, 1e-8
+    for name in model:
+        moments[name] = beta1 * moments[name] + (1 - beta1) * gradients[name]
+        velocities[name] = beta2 * velocities[name] + (1 - beta2) * gradients[name] ** 2
+        corrected_moment = moments[name] / (1 - beta1**step)
+        corrected_velocity = velocities[name] / (1 - beta2**step)
+        model[name] -= learning_rate * corrected_moment / (np.sqrt(corrected_velocity) + epsilon)
+
+
+def learning_rate(step: int, total_steps: int) -> float:
+    warmup = min(1.0, step / 1000)
+    progress = max(0.0, (step - 1000) / max(1, total_steps - 1000))
+    cosine = 0.5 * (1 + math.cos(math.pi * min(1.0, progress)))
+    return 0.002 * (0.2 + 0.8 * cosine) * warmup
 
 
 def train(
@@ -160,8 +194,6 @@ def train(
     model = initialise(rng)
     moments = {name: np.zeros_like(value) for name, value in model.items()}
     velocities = {name: np.zeros_like(value) for name, value in model.items()}
-    learning_rate = 0.002
-
     if len(data) < sequence_length + 2:
         raise ValueError("The corpus is too short to train the model.")
 
@@ -170,30 +202,10 @@ def train(
         inputs = np.stack([data[start : start + sequence_length] for start in starts])
         targets = np.stack([data[start + 1 : start + sequence_length + 1] for start in starts])
         loss, gradients = loss_and_gradients(model, inputs, targets)
-
-        # Global clipping is important for the long context used by chat turns.
-        norm = math.sqrt(sum(float(np.sum(gradient * gradient)) for gradient in gradients.values()))
-        if norm > 5:
-            for gradient in gradients.values():
-                gradient *= 5 / norm
-
-        # Adam with a short linear warmup and cosine decay keeps the compact
-        # model from collapsing into a punctuation-heavy attractor.
-        warmup = min(1.0, step / 1000)
-        progress = max(0.0, (step - 1000) / max(1, steps - 1000))
-        schedule = 0.5 * (1 + math.cos(math.pi * min(1.0, progress)))
-        rate = learning_rate * (0.2 + 0.8 * schedule) * warmup
-        beta1, beta2, epsilon = 0.9, 0.999, 1e-8
-        for name in model:
-            moments[name] = beta1 * moments[name] + (1 - beta1) * gradients[name]
-            velocities[name] = beta2 * velocities[name] + (1 - beta2) * gradients[name] ** 2
-            corrected_moment = moments[name] / (1 - beta1**step)
-            corrected_velocity = velocities[name] / (1 - beta2**step)
-            model[name] -= rate * corrected_moment / (np.sqrt(corrected_velocity) + epsilon)
-
+        rate = learning_rate(step, steps)
+        adam_step(model, gradients, moments, velocities, step, rate)
         if step == 1 or step % 250 == 0:
             print(f"step {step:05d}/{steps} · loss {loss:.4f} · lr {rate:.5f}")
-
     return model
 
 
@@ -217,29 +229,28 @@ def supervised_batch(
     rng: np.random.Generator,
     batch_size: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Align each user turn to the exact fixed context consumed by CSS."""
+    """Align user turns to the exact fixed prompt context consumed by CSS."""
 
     sequence_length = PROMPT_STEPS + SUPERVISED_TARGET_STEPS - 1
-    space = np.full((batch_size, sequence_length), CHARS.index(" "), dtype=np.int64)
-    targets = np.full((batch_size, sequence_length), CHARS.index(" "), dtype=np.int64)
+    space_id = SPACE_INDEX
+    inputs = np.full((batch_size, sequence_length), space_id, dtype=np.int64)
+    targets = np.full((batch_size, sequence_length), space_id, dtype=np.int64)
     loss_mask = np.zeros((batch_size, sequence_length), dtype=np.float32)
-    space_id = CHARS.index(" ")
-
     for batch_index in range(batch_size):
         example = examples[int(rng.integers(0, len(examples)))]
         context = normalize(f"user: {example['user']}\nassistant: ")[-PROMPT_STEPS:]
-        context = np.pad(context, (PROMPT_STEPS - len(context), 0), constant_values=space_id)
+        inputs[batch_index, :PROMPT_STEPS] = np.pad(
+            context,
+            (PROMPT_STEPS - len(context), 0),
+            constant_values=space_id,
+        )
         answer = normalize(example["assistant"] + "\n")[:SUPERVISED_TARGET_STEPS]
-        if len(answer) == 0:
-            continue
-        space[batch_index, :PROMPT_STEPS] = context
-        if len(answer) > 1:
-            space[batch_index, PROMPT_STEPS : PROMPT_STEPS + len(answer) - 1] = answer[:-1]
-        target_start = PROMPT_STEPS - 1
-        targets[batch_index, target_start : target_start + len(answer)] = answer
-        loss_mask[batch_index, target_start : target_start + len(answer)] = 1
-
-    return space, targets, loss_mask
+        if len(answer):
+            inputs[batch_index, PROMPT_STEPS : PROMPT_STEPS + len(answer) - 1] = answer[:-1]
+            target_start = PROMPT_STEPS - 1
+            targets[batch_index, target_start : target_start + len(answer)] = answer
+            loss_mask[batch_index, target_start : target_start + len(answer)] = 1
+    return inputs, targets, loss_mask
 
 
 def train_supervised(
@@ -248,70 +259,34 @@ def train_supervised(
     steps: int,
     batch_size: int,
 ) -> dict[str, np.ndarray]:
-    """Fine-tune on user/assistant pairs with loss only on assistant tokens."""
-
     rng = np.random.default_rng(seed)
     model = initialise(rng)
     moments = {name: np.zeros_like(value) for name, value in model.items()}
     velocities = {name: np.zeros_like(value) for name, value in model.items()}
-    learning_rate = 0.002
-
     for step in range(1, steps + 1):
         inputs, targets, loss_mask = supervised_batch(examples, rng, batch_size)
         loss, gradients = loss_and_gradients(model, inputs, targets, loss_mask)
-        norm = math.sqrt(sum(float(np.sum(gradient * gradient)) for gradient in gradients.values()))
-        if norm > 5:
-            for gradient in gradients.values():
-                gradient *= 5 / norm
-
-        warmup = min(1.0, step / 1000)
-        progress = max(0.0, (step - 1000) / max(1, steps - 1000))
-        schedule = 0.5 * (1 + math.cos(math.pi * min(1.0, progress)))
-        rate = learning_rate * (0.2 + 0.8 * schedule) * warmup
-        beta1, beta2, epsilon = 0.9, 0.999, 1e-8
-        for name in model:
-            moments[name] = beta1 * moments[name] + (1 - beta1) * gradients[name]
-            velocities[name] = beta2 * velocities[name] + (1 - beta2) * gradients[name] ** 2
-            corrected_moment = moments[name] / (1 - beta1**step)
-            corrected_velocity = velocities[name] / (1 - beta2**step)
-            model[name] -= rate * corrected_moment / (np.sqrt(corrected_velocity) + epsilon)
-
+        rate = learning_rate(step, steps)
+        adam_step(model, gradients, moments, velocities, step, rate)
         if step == 1 or step % 250 == 0:
             print(f"step {step:05d}/{steps} · supervised loss {loss:.4f} · lr {rate:.5f}")
-
     return model
 
 
-def evaluate_supervised_loss(
-    model: dict[str, np.ndarray],
-    examples: list[dict[str, str]],
-    seed: int,
-    batch_size: int = 64,
-) -> float:
-    rng = np.random.default_rng(seed)
-    inputs, targets, loss_mask = supervised_batch(examples, rng, batch_size)
-    return loss_and_gradients(model, inputs, targets, loss_mask)[0]
-
-
-def evaluate_loss(
-    model: dict[str, np.ndarray],
-    data: np.ndarray,
-    sequence_length: int,
-    samples: int = 16,
-) -> float:
-    """Measure held-in-corpus next-character loss for reproducible metadata."""
-
-    if len(data) < sequence_length + 2:
-        return float("nan")
+def evaluate_loss(model: dict[str, np.ndarray], data: np.ndarray, sequence_length: int, samples: int = 16) -> float:
     starts = np.linspace(0, len(data) - sequence_length - 2, samples, dtype=np.int64)
     inputs = np.stack([data[start : start + sequence_length] for start in starts])
     targets = np.stack([data[start + 1 : start + sequence_length + 1] for start in starts])
     return loss_and_gradients(model, inputs, targets)[0]
 
 
-def quantize_columns(values: np.ndarray, bits: int) -> dict[str, Any]:
-    """Symmetrically quantize each output column independently."""
+def evaluate_supervised_loss(model: dict[str, np.ndarray], examples: list[dict[str, str]], seed: int) -> float:
+    rng = np.random.default_rng(seed)
+    inputs, targets, loss_mask = supervised_batch(examples, rng, 64)
+    return loss_and_gradients(model, inputs, targets, loss_mask)[0]
 
+
+def quantize_columns(values: np.ndarray, bits: int) -> dict[str, Any]:
     qmax = (1 << (bits - 1)) - 1
     scales = np.max(np.abs(values), axis=0) / qmax
     scales = np.where(scales > 0, scales, 1.0).astype(np.float32)
@@ -334,22 +309,29 @@ def quantize_model(model: dict[str, np.ndarray]) -> dict[str, Any]:
     }
 
 
+def validate_tensors(tensors: dict[str, Any]) -> None:
+    expected = {
+        "wxh": (VOCAB_SIZE, HIDDEN_SIZE),
+        "whh": (HIDDEN_SIZE, HIDDEN_SIZE),
+        "why": (HIDDEN_SIZE, VOCAB_SIZE),
+        "bh": (1, HIDDEN_SIZE),
+        "by": (1, VOCAB_SIZE),
+    }
+    for name, shape in expected.items():
+        actual = tuple(tensors[name].get("shape", ()))
+        if actual != shape:
+            raise ValueError(f"{name} has shape {actual}; expected {shape} for CSS-RNN-{HIDDEN_SIZE}")
+
+
 def css_number(value: float) -> str:
     value = float(np.float32(value))
-    if value == 0:
-        return "0"
-    return format(value, ".9g")
+    return "0" if value == 0 else format(value, ".9g")
 
 
 VAR_PREFIXES = {
     "prompt": "p",
     "prompt-hidden": "ph",
-    "prompt-input-proj": "pi",
-    "prompt-recurrent-proj": "pr",
-    "input-proj": "i",
-    "recurrent-proj": "r",
     "generated-hidden": "gh",
-    "output-proj": "o",
     "logit": "l",
     "maximum": "x",
     "mask": "m",
@@ -358,8 +340,8 @@ VAR_PREFIXES = {
 
 
 def css_var(prefix: str, index: int, unit: int | None = None) -> str:
-    short_prefix = VAR_PREFIXES[prefix]
-    return f"--{short_prefix}-{index}" if unit is None else f"--{short_prefix}-{index}-{unit}"
+    name = VAR_PREFIXES[prefix]
+    return f"--{name}-{index}" if unit is None else f"--{name}-{index}-{unit}"
 
 
 def sum_expression(terms: list[str]) -> str:
@@ -371,8 +353,6 @@ def hard_tanh_expression(terms: list[str]) -> str:
 
 
 def qvalue(tensor: dict[str, Any], row: int, column: int) -> str:
-    # Keep dequantization as a nested number. CSS calc() accepts multiplication
-    # of two numeric values, but a flat `var() * q * scale` is invalid.
     return f"calc({tensor['q'][row][column]} * {css_number(tensor['scales'][column])})"
 
 
@@ -389,8 +369,8 @@ def hidden_declaration(
     input_prefix: str,
     step: int,
     unit: int,
-    previous_hidden_prefix: str | None,
-    previous_hidden_step: int | None,
+    previous_prefix: str | None,
+    previous_step: int | None,
     tensors: dict[str, Any],
     registrations: list[str],
 ) -> str:
@@ -402,7 +382,7 @@ def hidden_declaration(
             f"{qvalue(tensors['wxh'], character, unit)}"
         )
     for previous_unit in range(HIDDEN_SIZE):
-        previous = "0" if previous_hidden_prefix is None else f"var({css_var(previous_hidden_prefix, previous_hidden_step, previous_unit)})"
+        previous = "0" if previous_prefix is None else f"var({css_var(previous_prefix, previous_step, previous_unit)})"
         terms.append(f"{previous} * {qvalue(tensors['whh'], previous_unit, unit)}")
     return f"  {output}: {hard_tanh_expression(terms)};"
 
@@ -414,9 +394,9 @@ def generate_css(
     seed: int,
     validation_loss: float,
 ) -> str:
+    validate_tensors(tensors)
     declarations: list[str] = []
     registrations: list[str] = []
-
     for step in range(PROMPT_STEPS):
         for character in range(VOCAB_SIZE):
             name = css_var("prompt", step, character)
@@ -426,8 +406,8 @@ def generate_css(
     def emit_hidden_step(
         step: int,
         input_prefix: str,
-        previous_hidden_prefix: str | None,
-        previous_hidden_step: int | None,
+        previous_prefix: str | None,
+        previous_step: int | None,
         hidden_prefix: str,
     ) -> None:
         for unit in range(HIDDEN_SIZE):
@@ -438,8 +418,8 @@ def generate_css(
                     input_prefix,
                     step,
                     unit,
-                    previous_hidden_prefix,
-                    previous_hidden_step,
+                    previous_prefix,
+                    previous_step,
                     tensors,
                     registrations,
                 )
@@ -454,41 +434,33 @@ def generate_css(
             "prompt-hidden",
         )
 
-    previous_hidden_prefix = "prompt-hidden"
-    previous_hidden_step = PROMPT_STEPS - 1
+    previous_prefix = "prompt-hidden"
+    previous_step = PROMPT_STEPS - 1
     for step in range(GENERATED_STEPS):
         for character in range(VOCAB_SIZE):
             name = css_var("logit", step, character)
             register_property(registrations, name)
             terms = [bias_value(tensors["by"], character)]
             terms.extend(
-                f"var({css_var(previous_hidden_prefix, previous_hidden_step, unit)}) * "
+                f"var({css_var(previous_prefix, previous_step, unit)}) * "
                 f"{qvalue(tensors['why'], unit, character)}"
                 for unit in range(HIDDEN_SIZE)
             )
-            # Greedy character models often discover that a space is a cheap
-            # locally-optimal answer. This is a decoding constraint, still
-            # evaluated in CSS, that prevents blank prefixes and whitespace
-            # loops without changing the learned weights.
             if character == SPACE_INDEX:
-                terms.append(
-                    "-6" if step == 0 else f"-3 * var({css_var('mask', step - 1, SPACE_INDEX)})"
-                )
+                terms.append("-5" if step == 0 else f"-2 * var({css_var('mask', step - 1, SPACE_INDEX)})")
             elif character == NEWLINE_INDEX:
-                terms.append(
-                    "-2" if step == 0 else f"-1.5 * var({css_var('mask', step - 1, NEWLINE_INDEX)})"
-                )
+                terms.append("-2" if step == 0 else f"-1 * var({css_var('mask', step - 1, NEWLINE_INDEX)})")
             elif step:
-                for previous_step in range(max(0, step - REPETITION_WINDOW), step):
-                    terms.append(f"-{css_number(REPETITION_PENALTY)} * var({css_var('mask', previous_step, character)})")
+                for previous in range(max(0, step - REPETITION_WINDOW), step):
+                    terms.append(f"-{css_number(REPETITION_PENALTY)} * var({css_var('mask', previous, character)})")
             terms.append(css_number(character * TIE_BREAK))
             declarations.append(f"  {name}: {sum_expression(terms)};")
 
         maximum = css_var("maximum", step)
         register_property(registrations, maximum)
-        logit_terms = ", ".join(f"var({css_var('logit', step, character)})" for character in range(VOCAB_SIZE))
-        declarations.append(f"  {maximum}: max({logit_terms});")
-
+        declarations.append(
+            f"  {maximum}: max({', '.join(f'var({css_var('logit', step, character)})' for character in range(VOCAB_SIZE))});"
+        )
         masks: list[str] = []
         for character in range(VOCAB_SIZE):
             name = css_var("mask", step, character)
@@ -496,33 +468,25 @@ def generate_css(
             logit = css_var("logit", step, character)
             declarations.append(f"  {name}: calc(1 - abs(sign(calc(var({logit}) - var({maximum})))));")
             masks.append(f"{character} * var({name})")
-
         output = css_var("output", step)
         register_property(registrations, output)
         declarations.append(f"  {output}: {sum_expression(masks)};")
 
         if step < GENERATED_STEPS - 1:
-            emit_hidden_step(
-                step,
-                "mask",
-                previous_hidden_prefix,
-                previous_hidden_step,
-                "generated-hidden",
-            )
-            previous_hidden_prefix = "generated-hidden"
-            previous_hidden_step = step
+            emit_hidden_step(step, "mask", "generated-hidden", step - 1, "generated-hidden")
+            previous_prefix = "generated-hidden"
+            previous_step = step
 
     header = f"""/*
- * CSS-RNN-{HIDDEN_SIZE} · quantized conversational character model
- * {HIDDEN_SIZE} hidden units · direct matrix path
- * {VOCAB_SIZE}-symbol lowercase English/code vocabulary
+ * CSS-RNN-{HIDDEN_SIZE}-Q4 · quantized character language model
+ * {HIDDEN_SIZE} hidden units · {VOCAB_SIZE}-symbol closed vocabulary
  * {PROMPT_STEPS}-character context · {GENERATED_STEPS}-step greedy rollout
- * weights: signed 4-bit input matrix, signed 8-bit recurrent/output matrices
+ * matrices: signed 4-bit input values · signed 8-bit recurrent/output values
  * biases: signed 8-bit per-channel values
- * decoder: CSS whitespace guard and {REPETITION_WINDOW}-step repetition penalty
- * corpus SHA-256: {corpus_sha256}
+ * decoder: lowercase ASCII vocabulary, whitespace guard, and repetition penalty
+ * corpus sha256: {corpus_sha256}
  * training steps: {training_steps} · seed: {seed} · validation loss: {css_number(validation_loss)}
- * Every multiply, sum, hard-tanh, comparison, argmax, and recurrent step below
+ * Every multiply, sum, activation, comparison, argmax, and recurrent step below
  * is evaluated by the browser's CSS style engine.
  */
 """
@@ -540,7 +504,7 @@ def save_weights(
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "model": "CSS-RNN-32-Q4",
+        "model": f"CSS-RNN-{HIDDEN_SIZE}-Q4",
         "vocabulary": CHARS,
         "hidden_size": HIDDEN_SIZE,
         "prompt_steps": PROMPT_STEPS,
@@ -557,8 +521,8 @@ def save_weights(
             "recurrent_bits": RECURRENT_BITS,
             "output_bits": OUTPUT_BITS,
             "bias_bits": BIAS_BITS,
-            "scheme": "symmetric per-output-channel direct matrices with mixed precision",
-            "inference": "CSS dequantizes q * scale inside calc() expressions",
+            "scheme": "symmetric per-output-channel weight-only quantization with mixed precision",
+            "inference": "CSS dequantizes signed integers times scales inside calc()",
         },
         "weights": tensors,
     }
@@ -569,7 +533,6 @@ def main() -> None:
     args = parse_args()
     if args.sequence_length != TRAIN_SEQUENCE_LENGTH:
         raise ValueError(f"--sequence-length must remain {TRAIN_SEQUENCE_LENGTH} for this model")
-
     raw_corpus = args.corpus.read_bytes()
     corpus_sha256 = hashlib.sha256(raw_corpus).hexdigest()
     data = normalize(raw_corpus.decode("utf-8", errors="replace"))

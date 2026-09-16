@@ -211,7 +211,17 @@ function clearConversation() {
 }
 
 function validEnglishTokenStream(text) {
-  return [...text].every((character) => VOCABULARY.includes(character)) && /[a-z]/.test(text);
+  return text.length > 0
+    && text.length <= GENERATED_STEPS
+    && [...text].every((character) => VOCABULARY.includes(character) && character === character.toLowerCase())
+    && /[a-z]/.test(text);
+}
+
+function stableEnglishResponse(text) {
+  if (!validEnglishTokenStream(text)) return false;
+  const words = text.match(/[a-z]{2,}/g) || [];
+  if (words.length < 2) return false;
+  return !/(.{2,12})\1\1/.test(text.replace(/\s+/g, ' '));
 }
 
 async function runPrediction(event) {
@@ -232,7 +242,7 @@ async function runPrediction(event) {
     bindPrompt(modelPrompt(prompt));
     await new Promise((resolve) => window.requestAnimationFrame(resolve));
     const generated = readGeneratedText();
-    if (!validEnglishTokenStream(generated)) throw new Error('no English token stream');
+    if (!stableEnglishResponse(generated)) throw new Error('no stable English response');
     const latency = Math.round(performance.now() - startedAt);
     predictedText.textContent = generated;
     latencyBadge.textContent = `${latency}ms`;

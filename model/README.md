@@ -1,18 +1,17 @@
 # CSS-RNN-32 weights
 
-`weights.json` is the learned parameter set for the model compiled into
+`weights.json` is the quantized parameter set compiled into
 [`../css-model.css`](../css-model.css).
 
-- architecture: character-level recurrent language model
-- hidden units: 32
-- vocabulary: 32 lowercase letters plus punctuation and space
-- prompt seed: 24 characters
-- rollout: 64 greedy next-character steps
+- architecture: 32-unit character-level recurrent encoder and fixed rollout
+- vocabulary: 64 lowercase English, numeric, whitespace, and code symbols
+- prompt context: 64 characters
+- rollout: 96 greedy next-character steps
+- quantization: signed 4-bit input matrix; signed 8-bit recurrent, output, and bias values
 - activation: hard-tanh
-- training corpus: first 1 MB of the TinyStories validation text
-- story boundary markers: normalized to spaces before training
-- corpus source: <https://huggingface.co/datasets/roneneldan/TinyStories>
+- decoder: CSS greedy argmax with whitespace and repetition constraints
 
-The JSON records the corpus hash, training seed, and training step count. The
-stylesheet is the browser runtime form of these weights: it contains the
-unrolled recurrent graph and its numeric operands.
+The JSON records the corpus hash, training seed, step count, validation loss,
+and quantization scheme. The stylesheet is the browser runtime form of those
+weights: it contains the unrolled recurrent graph, numeric operands, argmax
+masks, and final output registers. JavaScript is only the I/O bridge.

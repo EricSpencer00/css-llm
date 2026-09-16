@@ -39,6 +39,7 @@ class CSSModelTests(unittest.TestCase):
         tensors = model.quantize_model(self.parameters)
         css = model.generate_css(tensors, "test-hash", 1, 42, 2.5)
         self.assertIn("signed 4-bit", css)
+        self.assertIn("whitespace guard", css)
         self.assertIn("--y-0", css)
         self.assertIn(f"--y-{model.GENERATED_STEPS - 1}", css)
         self.assertGreaterEqual(css.count("@property"), 20_000)
@@ -50,6 +51,14 @@ class CSSModelTests(unittest.TestCase):
         loss, gradients = model.loss_and_gradients(self.parameters, inputs, targets)
         self.assertTrue(np.isfinite(loss))
         self.assertTrue(all(np.isfinite(value).all() for value in gradients.values()))
+
+    def test_supervised_batch_masks_only_assistant_tokens(self) -> None:
+        examples = [{"user": "hello", "assistant": "hello there"}]
+        inputs, targets, mask = model.supervised_batch(examples, self.rng, 1)
+        self.assertEqual(inputs.shape, targets.shape)
+        self.assertEqual(inputs.shape, mask.shape)
+        self.assertEqual(mask[:, : model.PROMPT_STEPS - 1].sum(), 0)
+        self.assertGreater(mask.sum(), 0)
 
 
 if __name__ == "__main__":
