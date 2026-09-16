@@ -13,11 +13,8 @@ const promptInput = document.querySelector('#promptInput');
 const runButton = document.querySelector('#runButton');
 const predictedText = document.querySelector('#predictedText');
 const latencyBadge = document.querySelector('#latencyBadge');
-const stageStatus = document.querySelector('#stageStatus');
 const stageLatency = document.querySelector('#stageLatency');
 const tokenCount = document.querySelector('#tokenCount');
-const systemStatus = document.querySelector('#systemStatus');
-const footerState = document.querySelector('#footerState');
 const outputLabel = document.querySelector('#outputLabel');
 const bootSteps = [
   document.querySelector('#bootStepStylesheet'),
@@ -88,7 +85,6 @@ async function bootModel() {
   retryButton.hidden = true;
   setScreen('boot');
   bootSteps.forEach((step) => step.classList.remove('is-done'));
-  footerState.textContent = 'loading';
   setBootProgress(8);
   bootStatus.textContent = 'checking css-model.css';
 
@@ -117,14 +113,11 @@ async function bootModel() {
     modelReady = true;
     booting = false;
     setScreen('app');
-    systemStatus.textContent = 'style engine ready';
-    footerState.textContent = 'ready';
     promptInput.focus();
   } catch (error) {
     booting = false;
     setBootProgress(0);
     bootStatus.textContent = 'error';
-    footerState.textContent = 'error';
     retryButton.hidden = false;
     retryButton.focus();
   }
@@ -161,8 +154,6 @@ async function runPrediction(event) {
   runButton.disabled = true;
   latencyBadge.textContent = 'running';
   stageLatency.textContent = 'running';
-  stageStatus.textContent = 'running CSS';
-  systemStatus.textContent = 'CSS inference';
   outputLabel.textContent = 'next characters';
   predictedText.textContent = '';
 
@@ -175,14 +166,10 @@ async function runPrediction(event) {
     latencyBadge.textContent = `${latency}ms`;
     stageLatency.textContent = `${latency}ms`;
     tokenCount.textContent = String(generated.length);
-    stageStatus.textContent = 'ready';
-    systemStatus.textContent = 'style engine ready';
   } catch (error) {
     predictedText.textContent = 'error';
     latencyBadge.textContent = 'error';
     stageLatency.textContent = 'error';
-    stageStatus.textContent = 'error';
-    systemStatus.textContent = 'CSS error';
   } finally {
     runButton.disabled = false;
   }
@@ -191,10 +178,5 @@ async function runPrediction(event) {
 enterButton.addEventListener('click', bootModel);
 retryButton.addEventListener('click', bootModel);
 promptForm.addEventListener('submit', runPrediction);
-
-promptInput.addEventListener('input', () => {
-  if (!modelReady) return;
-  stageStatus.textContent = cleanPrompt(promptInput.value) ? 'staged' : 'ready';
-});
 
 bindPrompt('');

@@ -51,15 +51,7 @@
           </div>
         </section>
 
-        <section class="screen app-screen" id="appScreen" aria-labelledby="appTitle" hidden>
-          <div class="app-heading">
-            <div>
-              <p class="screen-kicker">CSS-RNN-32</p>
-              <h1 id="appTitle">Start with a phrase.</h1>
-            </div>
-            <span class="app-state"><i aria-hidden="true"></i><span id="systemStatus">style engine ready</span></span>
-          </div>
-
+        <section class="screen app-screen" id="appScreen" aria-label="CSS-RNN-32" hidden>
           <div class="prediction-output" aria-live="polite" aria-atomic="true">
             <div class="output-label"><span id="outputLabel">next characters</span><span id="latencyBadge">CSS</span></div>
             <p id="predictedText" aria-label="Generated text"></p>
@@ -75,7 +67,6 @@
           </form>
 
           <div class="app-status" aria-live="polite">
-            <span id="stageStatus">ready</span>
             <span><b id="tokenCount">0</b> chars · <b id="stageLatency">not run</b></span>
           </div>
 
@@ -83,7 +74,6 @@
       </main>
 
       <footer class="site-footer">
-        <span id="footerState">idle</span>
         <span>css-model.css</span>
       </footer>
     </div>
