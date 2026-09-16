@@ -1,9 +1,9 @@
-# CSS-RNN-32 weights
+# CSS-RNN-64 weights
 
 `weights.json` is the quantized parameter set compiled into
 [`../css-model.css`](../css-model.css).
 
-- architecture: 32-unit character-level recurrent encoder and fixed rollout
+- architecture: 64-unit character-level recurrent encoder and fixed rollout
 - vocabulary: 64 lowercase English, numeric, whitespace, and code symbols
 - prompt context: 64 characters
 - rollout: 96 greedy next-character steps

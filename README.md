@@ -4,7 +4,7 @@ I wanted to see how far a browser's style engine could be pushed before the
 idea stopped being useful and started being funny. This is a tiny conversational
 character model whose inference graph lives in `css-model.css`.
 
-The stylesheet contains a 32-unit recurrent encoder, quantized weights, typed
+The stylesheet contains a 64-unit recurrent encoder, quantized weights, typed
 numeric custom properties, and a fixed rollout graph. JavaScript only cleans
 the input, writes one-hot prompt characters, and reads numeric output ids from
 `getComputedStyle()`. It does not perform inference and there is no backend,
