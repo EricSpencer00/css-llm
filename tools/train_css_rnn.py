@@ -18,10 +18,6 @@ import argparse
 import hashlib
 import json
 import math
-import pickle
-import re
-import urllib.request
-import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -39,11 +35,11 @@ GENERATED_STEPS = 96
 TRAIN_SEQUENCE_LENGTH = 128
 SUPERVISED_TARGET_STEPS = 64
 
-# Every learned matrix is aggressively quantized. Biases keep eight bits so
-# the tiny model retains useful offsets after the ternary-ish matrix grid.
+# The input projection is aggressively quantized; recurrent and output
+# matrices keep eight bits so the tiny model retains useful state and logits.
 QUANTIZATION_BITS = 4
-RECURRENT_BITS = 4
-OUTPUT_BITS = 4
+RECURRENT_BITS = 8
+OUTPUT_BITS = 8
 BIAS_BITS = 8
 SPACE_INDEX = CHARS.index(" ")
 NEWLINE_INDEX = CHARS.index("\n")
@@ -62,19 +58,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--sequence-length", type=int, default=TRAIN_SEQUENCE_LENGTH)
     parser.add_argument("--seed", type=int, default=20260916)
-    parser.add_argument(
-        "--hf-repo",
-        help="optional Hugging Face GPT-Neo checkpoint to quantize and distill during training",
-    )
-    parser.add_argument(
-        "--hf-cache",
-        type=Path,
-        default=Path("/tmp/css-llm-huggingface"),
-        help="build-only cache for the Hugging Face checkpoint",
-    )
-    parser.add_argument("--distill-samples", type=int, default=24)
-    parser.add_argument("--distill-tokens", type=int, default=72)
-    parser.add_argument("--supervised-ratio", type=float, default=0.25)
     return parser.parse_args()
 
 
@@ -85,234 +68,6 @@ def normalize(text: str) -> np.ndarray:
     text = text.replace("\r\n", "\n").replace("\r", "\n").lower()
     lookup = {character: index for index, character in enumerate(CHARS)}
     return np.array([lookup.get(character, lookup[" "]) for character in text], dtype=np.int64)
-
-
-class _TorchStorage:
-    """Placeholder used to read legacy Hugging Face torch archives without torch."""
-
-    def __init__(self, key: str, dtype: str) -> None:
-        self.key = key
-        self.dtype = dtype
-
-
-def _rebuild_tensor(
-    storage: _TorchStorage,
-    offset: int,
-    size: tuple[int, ...],
-    stride: tuple[int, ...],
-    *args: Any,
-) -> tuple[Any, ...]:
-    return storage.key, storage.dtype, offset, tuple(size), tuple(stride)
-
-
-class _TorchArchiveUnpickler(pickle.Unpickler):
-    def persistent_load(self, pid: tuple[Any, ...]) -> _TorchStorage:
-        _, storage_type, key, _, _ = pid
-        return _TorchStorage(key, getattr(storage_type, "__name__", str(storage_type)))
-
-    def find_class(self, module: str, name: str) -> Any:
-        if module == "torch._utils" and name in {"_rebuild_tensor", "_rebuild_tensor_v2"}:
-            return _rebuild_tensor
-        if module == "torch":
-            return type(name, (), {})
-        return super().find_class(module, name)
-
-
-def load_torch_archive(path: Path) -> dict[str, np.ndarray]:
-    """Read HF's legacy torch.save tensor records using only stdlib and NumPy."""
-
-    with zipfile.ZipFile(path) as archive:
-        prefix = next(name[:-len("data.pkl")] for name in archive.namelist() if name.endswith("data.pkl"))
-        records = _TorchArchiveUnpickler(archive.open(prefix + "data.pkl")).load()
-        tensors: dict[str, np.ndarray] = {}
-        for name, (key, dtype_name, offset, shape, _stride) in records.items():
-            dtype = "?" if "Bool" in dtype_name else "<f4"
-            raw = np.frombuffer(archive.read(prefix + "data/" + key), dtype=dtype)
-            element_count = int(np.prod(shape)) if shape else 1
-            values = raw[offset : offset + element_count]
-            tensors[name] = values.reshape(shape).copy() if shape else np.array(values[0], dtype=np.float32)
-    return tensors
-
-
-def quantize_teacher_tensor(values: np.ndarray, bits: int = 4) -> np.ndarray:
-    """Quantize and immediately dequantize a teacher tensor for inference."""
-
-    if values.dtype.kind not in "fc" or values.ndim == 0:
-        return values
-    qmax = (1 << (bits - 1)) - 1
-    axis = tuple(range(1, values.ndim))
-    scales = np.max(np.abs(values), axis=axis, keepdims=True) / qmax if axis else np.max(np.abs(values)) / qmax
-    scales = np.where(scales > 0, scales, 1.0)
-    return (np.rint(values / scales).clip(-qmax - 1, qmax) * scales).astype(np.float32)
-
-
-class TinyStoriesTeacher:
-    """Minimal NumPy inference for the one-million-parameter HF GPT-Neo model."""
-
-    TOKEN_PATTERN = re.compile(r"'(?:s|t|re|ve|m|ll|d)| ?[A-Za-z]+| ?[0-9]+| ?[^A-Za-z0-9\s]+|\s+(?!\S)|\s+")
-
-    def __init__(self, root: Path, repo: str) -> None:
-        self.root = root
-        self.repo = repo
-        self.weights = {
-            name: quantize_teacher_tensor(values)
-            for name, values in load_torch_archive(root / "pytorch_model.bin").items()
-        }
-        self.vocabulary = json.loads((root / "vocab.json").read_text())
-        self.id_to_token = {index: token for token, index in self.vocabulary.items()}
-        self.merge_ranks = {
-            tuple(line.split()): index
-            for index, line in enumerate((root / "merges.txt").read_text().splitlines())
-            if line and not line.startswith("#")
-        }
-        self.bpe_cache: dict[str, str] = {}
-        self.byte_encoder, self.byte_decoder = self._byte_maps()
-        self.hidden_size = int(self.weights["transformer.wte.weight"].shape[1])
-        self.layers = max(int(name.split(".")[2]) for name in self.weights if name.startswith("transformer.h.")) + 1
-        config = json.loads((root / "config.json").read_text())
-        self.heads = int(config["num_heads"])
-        self.head_width = self.hidden_size // self.heads
-
-    @staticmethod
-    def _byte_maps() -> tuple[dict[int, str], dict[str, int]]:
-        visible = list(range(33, 127)) + list(range(161, 173)) + list(range(174, 256))
-        codepoints = visible[:]
-        extra = 0
-        for byte in range(256):
-            if byte not in visible:
-                visible.append(byte)
-                codepoints.append(256 + extra)
-                extra += 1
-        encoder = {byte: chr(codepoint) for byte, codepoint in zip(visible, codepoints)}
-        return encoder, {character: byte for byte, character in encoder.items()}
-
-    def bpe(self, token: str) -> str:
-        if token in self.bpe_cache:
-            return self.bpe_cache[token]
-        word = tuple(token)
-        pairs = set(zip(word, word[1:]))
-        while pairs:
-            pair = min(pairs, key=lambda item: self.merge_ranks.get(item, 10**9))
-            if pair not in self.merge_ranks:
-                break
-            left, right = pair
-            merged: list[str] = []
-            index = 0
-            while index < len(word):
-                try:
-                    next_index = word.index(left, index)
-                except ValueError:
-                    merged.extend(word[index:])
-                    break
-                merged.extend(word[index:next_index])
-                index = next_index
-                if index < len(word) - 1 and word[index] == left and word[index + 1] == right:
-                    merged.append(left + right)
-                    index += 2
-                else:
-                    merged.append(word[index])
-                    index += 1
-            word = tuple(merged)
-            pairs = set(zip(word, word[1:]))
-        result = " ".join(word)
-        self.bpe_cache[token] = result
-        return result
-
-    def encode(self, text: str) -> list[int]:
-        ids: list[int] = []
-        for chunk in self.TOKEN_PATTERN.findall(text):
-            byte_token = "".join(self.byte_encoder[byte] for byte in chunk.encode())
-            ids.extend(self.vocabulary[token] for token in self.bpe(byte_token).split())
-        return ids
-
-    def decode(self, ids: list[int]) -> str:
-        raw = b"".join(
-            bytes([self.byte_decoder[character]])
-            for token_id in ids
-            if token_id != 50256
-            for character in self.id_to_token[token_id]
-        )
-        return raw.decode("utf-8", errors="replace")
-
-    @staticmethod
-    def layer_norm(values: np.ndarray, weight: np.ndarray, bias: np.ndarray) -> np.ndarray:
-        centered = values - values.mean(axis=-1, keepdims=True)
-        return centered / np.sqrt(np.mean(centered * centered, axis=-1, keepdims=True) + 1e-5) * weight + bias
-
-    @staticmethod
-    def gelu(values: np.ndarray) -> np.ndarray:
-        return 0.5 * values * (1 + np.tanh(np.sqrt(2 / np.pi) * (values + 0.044715 * values**3)))
-
-    def forward(self, token_ids: list[int]) -> np.ndarray:
-        length = len(token_ids)
-        positions = np.arange(length) % self.weights["transformer.wpe.weight"].shape[0]
-        hidden = self.weights["transformer.wte.weight"][token_ids] + self.weights["transformer.wpe.weight"][positions]
-        causal = np.triu(np.ones((length, length), dtype=bool), 1)[None, :, :]
-        for layer in range(self.layers):
-            prefix = f"transformer.h.{layer}."
-            normalized = self.layer_norm(hidden, self.weights[prefix + "ln_1.weight"], self.weights[prefix + "ln_1.bias"])
-            query = (normalized @ self.weights[prefix + "attn.attention.q_proj.weight"].T).reshape(length, self.heads, self.head_width).transpose(1, 0, 2)
-            key = (normalized @ self.weights[prefix + "attn.attention.k_proj.weight"].T).reshape(length, self.heads, self.head_width).transpose(1, 0, 2)
-            value = (normalized @ self.weights[prefix + "attn.attention.v_proj.weight"].T).reshape(length, self.heads, self.head_width).transpose(1, 0, 2)
-            scores = np.einsum("htd,hsd->hts", query, key) / math.sqrt(self.head_width)
-            scores = np.where(causal, -1e9, scores)
-            scores -= scores.max(axis=-1, keepdims=True)
-            attention = np.exp(scores)
-            attention /= attention.sum(axis=-1, keepdims=True)
-            attended = np.einsum("hts,hsd->htd", attention, value).transpose(1, 0, 2).reshape(length, self.hidden_size)
-            hidden += attended @ self.weights[prefix + "attn.attention.out_proj.weight"].T + self.weights[prefix + "attn.attention.out_proj.bias"]
-            normalized = self.layer_norm(hidden, self.weights[prefix + "ln_2.weight"], self.weights[prefix + "ln_2.bias"])
-            feed_forward = self.gelu(normalized @ self.weights[prefix + "mlp.c_fc.weight"].T + self.weights[prefix + "mlp.c_fc.bias"])
-            hidden += feed_forward @ self.weights[prefix + "mlp.c_proj.weight"].T + self.weights[prefix + "mlp.c_proj.bias"]
-        hidden = self.layer_norm(hidden, self.weights["transformer.ln_f.weight"], self.weights["transformer.ln_f.bias"])
-        return hidden @ self.weights["transformer.wte.weight"].T
-
-    def generate(self, prompt: str, tokens: int, rng: np.random.Generator) -> str:
-        prompt_ids = self.encode(prompt)
-        token_ids = list(prompt_ids)
-        for _ in range(tokens):
-            logits = self.forward(token_ids[-256:])[-1].astype(np.float64)
-            logits[50256] = -1e9
-            candidates = np.argpartition(logits, -20)[-20:]
-            values = logits[candidates] / 0.8
-            values -= values.max()
-            probabilities = np.exp(values)
-            probabilities /= probabilities.sum()
-            next_id = int(rng.choice(candidates, p=probabilities))
-            token_ids.append(next_id)
-            if next_id == 50256:
-                break
-        return self.decode(token_ids[len(prompt_ids) :])
-
-    def distill(self, samples: int, tokens: int, seed: int) -> str:
-        prompts = [
-            "Once upon a time there was",
-            "A little child named",
-            "One sunny day",
-            "In a small town",
-            "There was a kind robot",
-            "A happy dog found",
-            "The young fox wanted",
-            "At the edge of the forest",
-        ]
-        rng = np.random.default_rng(seed)
-        stories = [self.generate(prompts[index % len(prompts)], tokens, rng) for index in range(samples)]
-        return "\n\n".join(stories)
-
-
-def download_teacher(repo: str, cache: Path) -> TinyStoriesTeacher:
-    """Fetch the build-only teacher files from the public Hugging Face Hub."""
-
-    cache.mkdir(parents=True, exist_ok=True)
-    for filename in ("config.json", "vocab.json", "merges.txt", "pytorch_model.bin"):
-        destination = cache / filename
-        if destination.exists():
-            continue
-        url = f"https://huggingface.co/{repo}/resolve/main/{filename}"
-        print(f"downloading {repo}/{filename}")
-        with urllib.request.urlopen(url, timeout=120) as response:
-            destination.write_bytes(response.read())
-    return TinyStoriesTeacher(cache, repo)
 
 
 def initialise(rng: np.random.Generator) -> dict[str, np.ndarray]:
@@ -434,10 +189,9 @@ def train(
     steps: int,
     batch_size: int,
     sequence_length: int,
-    model: dict[str, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
     rng = np.random.default_rng(seed)
-    model = initialise(rng) if model is None else {name: value.copy() for name, value in model.items()}
+    model = initialise(rng)
     moments = {name: np.zeros_like(value) for name, value in model.items()}
     velocities = {name: np.zeros_like(value) for name, value in model.items()}
     if len(data) < sequence_length + 2:
@@ -504,10 +258,9 @@ def train_supervised(
     seed: int,
     steps: int,
     batch_size: int,
-    model: dict[str, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
     rng = np.random.default_rng(seed)
-    model = initialise(rng) if model is None else {name: value.copy() for name, value in model.items()}
+    model = initialise(rng)
     moments = {name: np.zeros_like(value) for name, value in model.items()}
     velocities = {name: np.zeros_like(value) for name, value in model.items()}
     for step in range(1, steps + 1):
@@ -720,7 +473,7 @@ def generate_css(
         declarations.append(f"  {output}: {sum_expression(masks)};")
 
         if step < GENERATED_STEPS - 1:
-            emit_hidden_step(step, "mask", "generated-hidden", step - 1, "generated-hidden")
+            emit_hidden_step(step, "mask", previous_prefix, previous_step, "generated-hidden")
             previous_prefix = "generated-hidden"
             previous_step = step
 
@@ -728,7 +481,7 @@ def generate_css(
  * CSS-RNN-{HIDDEN_SIZE}-Q4 · quantized character language model
  * {HIDDEN_SIZE} hidden units · {VOCAB_SIZE}-symbol closed vocabulary
  * {PROMPT_STEPS}-character context · {GENERATED_STEPS}-step greedy rollout
- * matrices: signed 4-bit input/recurrent/output values
+ * matrices: signed 4-bit input values · signed 8-bit recurrent/output values
  * biases: signed 8-bit per-channel values
  * decoder: lowercase ASCII vocabulary, whitespace guard, and repetition penalty
  * corpus sha256: {corpus_sha256}
@@ -748,8 +501,6 @@ def save_weights(
     seed: int,
     validation_loss: float,
     training_mode: str,
-    teacher_repo: str | None = None,
-    teacher_samples: int = 0,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -761,11 +512,6 @@ def save_weights(
         "training_sequence_length": TRAIN_SEQUENCE_LENGTH,
         "supervised_target_steps": SUPERVISED_TARGET_STEPS,
         "training_mode": training_mode,
-        "teacher": {
-            "repository": teacher_repo,
-            "samples": teacher_samples,
-            "quantization": "symmetric per-output-channel 4-bit weight-only inference",
-        } if teacher_repo else None,
         "training_steps": steps,
         "seed": seed,
         "corpus_sha256": corpus_sha256,
@@ -789,28 +535,9 @@ def main() -> None:
         raise ValueError(f"--sequence-length must remain {TRAIN_SEQUENCE_LENGTH} for this model")
     raw_corpus = args.corpus.read_bytes()
     corpus_sha256 = hashlib.sha256(raw_corpus).hexdigest()
-    corpus_text = raw_corpus.decode("utf-8", errors="replace")
+    data = normalize(raw_corpus.decode("utf-8", errors="replace"))
     examples = load_examples(args.examples) if args.examples else None
-    teacher_samples = 0
-    if args.hf_repo:
-        teacher = download_teacher(args.hf_repo, args.hf_cache)
-        teacher_text = teacher.distill(args.distill_samples, args.distill_tokens, args.seed)
-        corpus_text += "\n\n" + teacher_text
-        teacher_samples = args.distill_samples
-
-    data = normalize(corpus_text)
-    if args.hf_repo and not 0 < args.supervised_ratio < 1:
-        raise ValueError("--supervised-ratio must be between 0 and 1 when using --hf-repo")
-
-    if args.hf_repo:
-        pretraining_steps = args.steps if not examples else max(1, round(args.steps * (1 - args.supervised_ratio)))
-        finetuning_steps = args.steps - pretraining_steps if examples else 0
-        model = train(data, args.seed, pretraining_steps, args.batch_size, args.sequence_length)
-        if examples and finetuning_steps:
-            model = train_supervised(examples, args.seed + 1, finetuning_steps, args.batch_size, model)
-        validation_loss = evaluate_supervised_loss(model, examples, args.seed) if examples else evaluate_loss(model, data, args.sequence_length)
-        training_mode = "4-bit HF teacher distillation plus supervised user/assistant fine-tuning" if examples else "4-bit HF teacher distillation"
-    elif examples:
+    if examples:
         model = train_supervised(examples, args.seed, args.steps, args.batch_size)
         validation_loss = evaluate_supervised_loss(model, examples, args.seed)
         training_mode = "supervised user/assistant next-character fine-tuning"
@@ -819,17 +546,7 @@ def main() -> None:
         validation_loss = evaluate_loss(model, data, args.sequence_length)
         training_mode = "causal next-character language modeling"
     tensors = quantize_model(model)
-    save_weights(
-        args.weights,
-        tensors,
-        corpus_sha256,
-        args.steps,
-        args.seed,
-        validation_loss,
-        training_mode,
-        args.hf_repo,
-        teacher_samples,
-    )
+    save_weights(args.weights, tensors, corpus_sha256, args.steps, args.seed, validation_loss, training_mode)
     args.css.parent.mkdir(parents=True, exist_ok=True)
     args.css.write_text(generate_css(tensors, corpus_sha256, args.steps, args.seed, validation_loss))
     print(f"validation loss {validation_loss:.4f}")

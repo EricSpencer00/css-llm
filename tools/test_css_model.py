@@ -24,7 +24,7 @@ class CSSModelTests(unittest.TestCase):
         self.assertEqual(decoded, "hello, caf !\nprint(1)")
         self.assertNotIn("é", model.CHARS)
 
-    def test_quantized_matrices_are_signed_four_bit(self) -> None:
+    def test_quantized_matrices_use_mixed_precision(self) -> None:
         tensors = model.quantize_model(self.parameters)
         matrix_bits = {"wxh": 4, "whh": 8, "why": 8}
         for name, bits in matrix_bits.items():
@@ -44,6 +44,7 @@ class CSSModelTests(unittest.TestCase):
         self.assertIn(f"--y-{model.GENERATED_STEPS - 1}", css)
         self.assertGreaterEqual(css.count("@property"), 20_000)
         self.assertNotIn("--css-rnn-", css)
+        self.assertNotIn("--gh--1-", css)
 
     def test_forward_loss_has_finite_gradient(self) -> None:
         inputs = self.rng.integers(0, model.VOCAB_SIZE, size=(4, 16), dtype=np.int64)
@@ -51,6 +52,12 @@ class CSSModelTests(unittest.TestCase):
         loss, gradients = model.loss_and_gradients(self.parameters, inputs, targets)
         self.assertTrue(np.isfinite(loss))
         self.assertTrue(all(np.isfinite(value).all() for value in gradients.values()))
+
+    def test_shape_validation_rejects_stale_artifacts(self) -> None:
+        tensors = model.quantize_model(self.parameters)
+        tensors["whh"]["shape"] = [32, 32]
+        with self.assertRaises(ValueError):
+            model.validate_tensors(tensors)
 
     def test_supervised_batch_masks_only_assistant_tokens(self) -> None:
         examples = [{"user": "hello", "assistant": "hello there"}]
