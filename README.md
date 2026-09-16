@@ -33,28 +33,7 @@ python3 -m http.server 4175
 Open <http://127.0.0.1:4175/> after starting the server. A local HTTP server
 is required because the stylesheet is inspected through the browser's CSSOM.
 
-## Rebuild
+## Deployment
 
-The model compiler accepts a training corpus, optional supervised examples,
-and an optional Hugging Face teacher checkpoint:
-
-```sh
-python3 tools/train_css_rnn.py \
-  --corpus model/training_corpus.txt \
-  --examples model/supervised.jsonl \
-  --weights model/weights.json \
-  --css css-model.css \
-  --hf-repo roneneldan/TinyStories-Instruct-1M
-```
-
-The teacher is used during training only. The browser receives the compiled
-CSS artifact and the quantized weights are stored in `model/weights.json`.
-
-## Verification
-
-```sh
-python3 -m unittest discover -s tools -p 'test_*.py' -v
-```
-
-The `main` branch deploys through GitHub Pages at
-<https://ericspencer.us/css-llm/>.
+The repository contains the compiled runtime only. The `main` branch deploys
+through GitHub Pages at <https://ericspencer.us/css-llm/>.

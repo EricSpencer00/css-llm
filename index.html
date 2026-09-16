@@ -3,101 +3,158 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#d5d7df" />
-    <meta name="description" content="A quantized conversational character model compiled into CSS and evaluated by the browser style engine." />
-    <link rel="canonical" href="https://ericspencer.us/css-llm/" />
-    <meta property="og:title" content="FWD/∞ — conversational AI in CSS" />
-    <meta property="og:description" content="A quantized conversational character model compiled into CSS and evaluated by the browser style engine." />
-    <meta property="og:url" content="https://ericspencer.us/css-llm/" />
-    <meta property="og:type" content="website" />
-    <title>FWD/∞ — a character model in CSS</title>
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <title>CSS LLM</title>
+    <style>
+      :root {
+        --page: oklch(0.985 0.004 90);
+        --ink: oklch(0.16 0.006 90);
+        --muted: oklch(0.44 0.01 265);
+        --rule: oklch(0.48 0.012 265);
+        --accent: oklch(0.52 0.17 17);
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+
+      html {
+        min-width: 320px;
+        background: var(--page);
+      }
+
+      body {
+        min-width: 320px;
+        max-width: 720px;
+        margin: 0 auto;
+        padding: clamp(20px, 8vw, 72px) clamp(16px, 5vw, 32px);
+        color: var(--ink);
+        background: var(--page);
+        font-family: var(--mono);
+      }
+
+      button,
+      input { font: inherit; }
+
+      button:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+      }
+
+      .app {
+        display: grid;
+        gap: 20px;
+      }
+
+      form { display: grid; gap: 6px; }
+
+      label,
+      .response-label {
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: lowercase;
+      }
+
+      .prompt-line {
+        display: flex;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        padding: 8px 0;
+        color: var(--ink);
+        background: transparent;
+        outline: 0;
+        font-size: 16px;
+      }
+
+      input::placeholder { color: var(--muted); }
+
+      button {
+        border: 0;
+        padding: 8px 0 8px 12px;
+        color: var(--accent);
+        background: transparent;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: lowercase;
+      }
+
+      button:hover { color: var(--ink); }
+      button:disabled { cursor: wait; opacity: 0.55; }
+
+      .response { min-height: 160px; }
+
+      .response-label {
+        display: flex;
+        align-items: center;
+        min-height: 16px;
+        gap: 8px;
+      }
+
+      .spinner {
+        width: 12px;
+        height: 12px;
+        margin-left: auto;
+        border: 1px solid color-mix(in oklch, var(--accent), transparent 50%);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 700ms linear infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      pre {
+        max-width: 65ch;
+        min-height: 118px;
+        margin: 14px 0 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font: 20px/1.15 var(--mono);
+      }
+
+      .css-rnn-engine {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation-duration: 0.001ms;
+          animation-iteration-count: 1;
+        }
+      }
+    </style>
     <link rel="stylesheet" href="css-model.css?v=4" />
   </head>
-  <body class="is-gate">
-    <div class="page-shell">
-      <header class="site-header">
-        <a class="brand" href="#top" aria-label="FWD infinity, go to the top">
-          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span>fwd/∞</span>
-        </a>
-        <div class="header-title">CSS conversational model</div>
-        <div class="header-model">CSS-RNN-64 · Q4/Q8</div>
-      </header>
+  <body>
+    <main class="app">
+      <form id="promptForm">
+        <label for="promptInput">ask</label>
+        <div class="prompt-line">
+          <input id="promptInput" type="text" maxlength="72" autocomplete="off" placeholder="ask anything" />
+          <button id="runButton" type="submit" disabled>ask</button>
+        </div>
+      </form>
 
-      <main id="top">
-        <section class="screen gate-screen" id="gateScreen" aria-labelledby="gateTitle">
-          <div class="screen-copy">
-            <p class="screen-kicker">CSS-RNN-64 · Q4/Q8</p>
-            <h1 id="gateTitle">A quantized conversational model runs in your browser as a CSS file.</h1>
-            <button class="enter-button" id="enterButton" type="button">enter</button>
-          </div>
-        </section>
-
-        <section class="screen boot-screen" id="bootScreen" aria-labelledby="bootTitle" hidden>
-          <div class="screen-copy">
-            <p class="screen-kicker">CSS-RNN-64 · Q4/Q8</p>
-            <h1 id="bootTitle">The browser is loading the quantized CSS graph.</h1>
-            <p class="screen-intro" id="bootStatus" aria-live="polite">checking css-model.css</p>
-            <div class="boot-progress" role="progressbar" aria-label="Loading CSS model" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <span id="bootMeter"></span>
-            </div>
-            <ol class="boot-log" aria-label="CSS model boot steps">
-              <li id="bootStepStylesheet">load quantized stylesheet</li>
-              <li id="bootStepProperties">resolve 64-character context</li>
-              <li id="bootStepGraph">check 96-step graph</li>
-            </ol>
-            <button class="enter-button boot-retry" id="retryButton" type="button" hidden>retry</button>
-          </div>
-        </section>
-
-        <section class="screen app-screen" id="appScreen" aria-label="CSS-RNN-64 conversational model" hidden>
-          <div class="conversation-log" id="conversationLog" aria-live="polite" aria-label="Conversation">
-            <p class="conversation-empty" id="conversationEmpty">Ask a question. The recurrent graph encodes your prompt and replies in lowercase English.</p>
-          </div>
-
-          <div class="prediction-output" id="predictionOutput" aria-live="polite" aria-atomic="true" aria-busy="false">
-            <div class="output-label">
-              <span id="outputLabel">assistant · ready</span>
-              <span class="loading-indicator" id="loadingIndicator" role="status" aria-label="CSS graph is resolving" hidden>
-                <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
-              </span>
-              <span id="latencyBadge">CSS</span>
-            </div>
-            <pre id="predictedText" aria-label="Generated response"></pre>
-          </div>
-
-          <form class="prompt-form" id="promptForm">
-            <label for="promptInput"><span>message</span><small>72 chars · lowercase English/code</small></label>
-            <div class="prompt-line">
-              <span aria-hidden="true">you@css:~$</span>
-              <input id="promptInput" type="text" maxlength="72" autocomplete="off" placeholder="explain flexbox" />
-              <button class="run-button" id="runButton" type="submit">ask</button>
-            </div>
-          </form>
-
-          <div class="starter-row" aria-label="Starter prompts">
-            <span>try</span>
-            <button type="button" data-starter="what can you do?">what can you do?</button>
-            <button type="button" data-starter="write a css button">write a css button</button>
-            <button type="button" data-starter="why is the sky blue?">why is the sky blue?</button>
-            <button class="clear-button" id="clearButton" type="button">clear</button>
-          </div>
-
-          <div class="app-status" aria-live="polite">
-            <span><b id="tokenCount">0</b> chars · <b id="stageLatency">not run</b></span>
-            <span>weights <b>q4/q8</b> · inference <b>CSS</b></span>
-          </div>
-
-        </section>
-      </main>
-
-      <footer class="site-footer">
-        <span>css-model.css</span>
-      </footer>
-    </div>
+      <output class="response" id="predictionOutput" aria-live="polite" aria-atomic="true" aria-busy="true">
+        <div class="response-label">
+          <span id="outputLabel">loading</span>
+          <span class="spinner" id="loadingIndicator" role="status" aria-label="loading" hidden></span>
+        </div>
+        <pre id="predictedText" aria-label="Generated response"></pre>
+      </output>
+    </main>
 
     <div class="css-rnn-engine" data-css-rnn-engine aria-hidden="true"></div>
-    <script type="module" src="script.js?v=css6"></script>
+    <script type="module" src="script.js?v=7"></script>
   </body>
 </html>
