@@ -1,4 +1,6 @@
-# STE-001
+# CSS LLM
+
+Technical specification: STE-001.
 
 ## CSS language model
 
