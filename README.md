@@ -1,10 +1,6 @@
 # CSS LLM
 
-Technical specification: STE-001.
-
-## CSS language model
-
-STE-001 is a browser experiment that evaluates a quantized recurrent language
+This is a browser experiment that evaluates a quantized recurrent language
 model through CSS custom properties. The checked-in runtime has no server,
 WASM module, ONNX runtime, model download, or external dependency.
 
