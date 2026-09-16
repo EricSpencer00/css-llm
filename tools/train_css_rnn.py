@@ -29,12 +29,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--corpus", type=Path, required=True)
     parser.add_argument("--weights", type=Path, default=Path("model/weights.json"))
     parser.add_argument("--css", type=Path, default=Path("css-model.css"))
-    parser.add_argument("--steps", type=int, default=1800)
+    parser.add_argument("--steps", type=int, default=30000)
     parser.add_argument("--seed", type=int, default=1337)
     return parser.parse_args()
 
 
 def normalize(text: str) -> np.ndarray:
+    text = text.replace("<|endoftext|>", " ")
     lookup = {character: index for index, character in enumerate(CHARS)}
     return np.array([lookup.get(character, lookup[" "]) for character in text.lower()], dtype=np.int64)
 
@@ -222,7 +223,7 @@ def generate_css(model: dict[str, np.ndarray], corpus_sha256: str) -> str:
             previous_step = step
 
     header = f"""/*
- * CSS-RNN-32 · a real character-level language model
+ * CSS-RNN-32 · a 32-unit character model
  * {HIDDEN_SIZE} hidden units · {VOCAB_SIZE} character vocabulary
  * {PROMPT_STEPS}-character prompt seed · {GENERATED_STEPS}-step fixed rollout
  * Trained corpus SHA-256: {corpus_sha256}

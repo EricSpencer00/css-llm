@@ -10,6 +10,7 @@
 - rollout: 64 greedy next-character steps
 - activation: hard-tanh
 - training corpus: first 1 MB of the TinyStories validation text
+- story boundary markers: normalized to spaces before training
 - corpus source: <https://huggingface.co/datasets/roneneldan/TinyStories>
 
 The JSON records the corpus hash, training seed, and training step count. The
