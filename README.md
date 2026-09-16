@@ -1,49 +1,40 @@
-# CSS Foundation Toy
+# STE-001
 
-I wanted to see how far a browser's style engine could be pushed before the
-idea stopped being useful and started being funny. This is a tiny conversational
-character model whose inference graph lives in `css-model.css`.
+## CSS language model
 
-The stylesheet contains a 64-unit recurrent encoder, quantized weights, typed
-numeric custom properties, and a fixed rollout graph. JavaScript only cleans
-the input, writes one-hot prompt characters, and reads numeric output ids from
-`getComputedStyle()`. It does not perform inference and there is no backend,
-WASM module, ONNX runtime, model download, or external runtime dependency.
+STE-001 is a browser experiment that evaluates a quantized recurrent language
+model through CSS custom properties. The checked-in runtime has no server,
+WASM module, ONNX runtime, model download, or external dependency.
 
-The model uses signed 4-bit input weights and signed 8-bit recurrent/output
-weights, trained with quantization-aware forward passes. An optional build-time
-TinyStories teacher supplies additional language signal; it is not downloaded
-by the browser. Its supervised corpus
-uses `user:` and `assistant:` turns, so the fixed graph is optimized for short
-conversational replies and compact code sketches. A closed lowercase
-English/code vocabulary, whitespace guard, repetition penalty, and output
-validator keep the public boundary deterministic without inserting canned
-answers or routing prompts outside the model.
+## Runtime contract
 
-Live site: <https://ericspencer.us/css-llm/>
+`css-model.css` contains the model graph. It defines typed numeric properties,
+quantized operands, recurrent state, greedy character selection, and a fixed
+96-step rollout. The browser style engine resolves the graph.
 
-## Local preview
+`script.js` is the I/O bridge. It writes a one-hot prompt into CSS custom
+properties, reads the computed character ids from `getComputedStyle()`, and
+renders the result. It does not perform inference.
+
+The model uses 64 hidden units, a 64-character prompt context, a fixed
+96-character output window, signed 4-bit input weights, and signed 8-bit
+recurrent, output, and bias values. The runtime vocabulary is fixed at build
+time and includes lowercase letters, numbers, whitespace, punctuation, and
+common code symbols.
+
+## Local execution
 
 ```sh
 python3 -m http.server 4175
 ```
 
-Then open <http://127.0.0.1:4175/>.
+Open <http://127.0.0.1:4175/> after starting the server. A local HTTP server
+is required because the stylesheet is inspected through the browser's CSSOM.
 
-## Rebuild the model
+## Rebuild
 
-The corpus builder can combine the conversational seed set with a TinyStories
-text file and a DailyDialog JSONL or parquet export:
-
-```sh
-python3 tools/build_corpus.py \
-  --tiny-stories /path/to/TinyStories-valid.txt \
-  --daily-dialog /path/to/daily_dialog.jsonl \
-  --output model/training_corpus.txt \
-  --examples model/supervised.jsonl
-```
-
-Then train and compile the CSS artifact:
+The model compiler accepts a training corpus, optional supervised examples,
+and an optional Hugging Face teacher checkpoint:
 
 ```sh
 python3 tools/train_css_rnn.py \
@@ -54,16 +45,14 @@ python3 tools/train_css_rnn.py \
   --hf-repo roneneldan/TinyStories-Instruct-1M
 ```
 
-The instruction-tuned checkpoint is used only while training and is quantized
-before distillation; the checked-in runtime remains a self-contained CSS file.
+The teacher is used during training only. The browser receives the compiled
+CSS artifact and the quantized weights are stored in `model/weights.json`.
 
-Training uses NumPy. The browser-side model remains plain CSS, and the
-regression checks can be run with:
+## Verification
 
 ```sh
 python3 -m unittest discover -s tools -p 'test_*.py' -v
 ```
 
-The `main` branch deploys through GitHub Pages using `.github/workflows/pages.yml`.
-The repository name supplies the `/css-llm/` path on the `ericspencer.us`
-Pages domain.
+The `main` branch deploys through GitHub Pages at
+<https://ericspencer.us/css-llm/>.
