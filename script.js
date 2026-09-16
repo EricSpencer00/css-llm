@@ -17,6 +17,8 @@ const latencyBadge = document.querySelector('#latencyBadge');
 const stageLatency = document.querySelector('#stageLatency');
 const tokenCount = document.querySelector('#tokenCount');
 const outputLabel = document.querySelector('#outputLabel');
+const predictionOutput = document.querySelector('#predictionOutput');
+const loadingIndicator = document.querySelector('#loadingIndicator');
 const conversationLog = document.querySelector('#conversationLog');
 const conversationEmpty = document.querySelector('#conversationEmpty');
 const starterButtons = [...document.querySelectorAll('[data-starter]')];
@@ -207,6 +209,8 @@ function clearConversation() {
   latencyBadge.textContent = 'CSS';
   stageLatency.textContent = 'not run';
   tokenCount.textContent = '0';
+  predictionOutput.setAttribute('aria-busy', 'false');
+  loadingIndicator.hidden = true;
   promptInput.focus();
 }
 
@@ -242,6 +246,8 @@ async function runPrediction(event) {
   stageLatency.textContent = 'running';
   outputLabel.textContent = 'assistant · thinking';
   predictedText.textContent = '';
+  predictionOutput.setAttribute('aria-busy', 'true');
+  loadingIndicator.hidden = false;
 
   try {
     bindPrompt(modelPrompt(prompt));
@@ -264,6 +270,8 @@ async function runPrediction(event) {
     stageLatency.textContent = 'error';
     outputLabel.textContent = 'assistant · unavailable';
   } finally {
+    predictionOutput.setAttribute('aria-busy', 'false');
+    loadingIndicator.hidden = true;
     runButton.disabled = false;
     starterButtons.forEach((button) => { button.disabled = false; });
   }
