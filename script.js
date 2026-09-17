@@ -8,14 +8,12 @@ const outputLabel = document.querySelector('#outputLabel');
 const loadingIndicator = document.querySelector('#loadingIndicator');
 
 const VOCABULARY = "abcdefghijklmnopqrstuvwxyz0123456789 .,!?\'\n:;(){}[]+-*/=#_<>\"%&|";
-const PROMPT_STEPS = 64;
+const PROMPT_STEPS = 32;
 const GENERATED_STEPS = 96;
 const DEFAULT_SEED = 'what can you do?';
 const MAX_MESSAGE_LENGTH = 72;
 
 let modelReady = false;
-let turns = [];
-
 function cssVar(prefix, index, character) {
   return character === undefined ? `--${prefix}-${index}` : `--${prefix}-${index}-${character}`;
 }
@@ -59,15 +57,19 @@ function readGeneratedText() {
     if (!Number.isFinite(value)) throw new Error(`missing CSS output at step ${step}`);
     ids.push(Math.max(0, Math.min(VOCABULARY.length - 1, Math.round(value))));
   }
-  return ids.map((id) => VOCABULARY[id]).join('').trim();
+  const text = ids.map((id) => VOCABULARY[id]).join('');
+  const end = text.indexOf('\n');
+  const line = (end === -1 ? text : text.slice(0, end)).trim();
+  for (let size = Math.min(24, Math.floor(line.length / 2)); size >= 8; size -= 1) {
+    const suffix = line.slice(-size);
+    const previous = line.lastIndexOf(suffix, line.length - size - 1);
+    if (previous !== -1) return line.slice(0, previous + size).trim();
+  }
+  return line;
 }
 
 function modelPrompt(message) {
-  const history = turns
-    .slice(-3)
-    .map((turn) => `${turn.role}: ${turn.text}`)
-    .join('\n');
-  return `${history}${history ? '\n' : ''}user: ${message}\nassistant: `.slice(-PROMPT_STEPS);
+  return `user: ${message}\n`.slice(-PROMPT_STEPS);
 }
 
 async function bootModel() {
@@ -103,7 +105,6 @@ async function runPrediction(event) {
     const generated = readGeneratedText();
     predictedText.textContent = generated;
     outputLabel.textContent = 'response';
-    turns.push({ role: 'user', text: prompt }, { role: 'assistant', text: generated });
     promptInput.value = '';
   } catch (error) {
     outputLabel.textContent = 'error';

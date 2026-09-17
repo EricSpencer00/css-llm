@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Fast regression checks for the CSS model compiler."""
+
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).parent))
+import train_css_rnn as model  # noqa: E402
+
+
+class CSSModelTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.rng = np.random.default_rng(42)
+        self.parameters = model.initialise(self.rng)
+
+    def test_vocabulary_is_closed_and_lowercase(self) -> None:
+        encoded = model.normalize("Hello, café!\r\nprint(1)")
+        decoded = "".join(model.CHARS[index] for index in encoded)
+        self.assertEqual(decoded, "hello, caf !\nprint(1)")
+        self.assertNotIn("é", model.CHARS)
+
+    def test_quantized_matrices_use_mixed_precision(self) -> None:
+        tensors = model.quantize_model(self.parameters)
+        matrix_bits = {"wxh": 4, "whh": 8, "wch": 8, "why": 8}
+        for name, bits in matrix_bits.items():
+            values = np.array(tensors[name]["q"])
+            self.assertLessEqual(np.abs(values).max(), (1 << (bits - 1)) - 1, name)
+            self.assertEqual(tensors[name]["bits"], bits)
+        for name in ("bh", "by"):
+            self.assertLessEqual(np.abs(np.array(tensors[name]["q"])).max(), 127, name)
+            self.assertEqual(tensors[name]["bits"], 8)
+
+    def test_compiler_emits_full_fixed_graph(self) -> None:
+        tensors = model.quantize_model(self.parameters)
+        css = model.generate_css(tensors, "test-hash", 1, 42, 2.5)
+        self.assertIn("signed 4-bit", css)
+        self.assertIn("prompt-memory", css)
+        self.assertIn("whitespace guard", css)
+        self.assertIn("--y-0", css)
+        self.assertIn(f"--y-{model.GENERATED_STEPS - 1}", css)
+        self.assertGreaterEqual(css.count("@property"), 20_000)
+        self.assertNotIn("--css-rnn-", css)
+        self.assertNotIn("--gh--1-", css)
+
+    def test_forward_loss_has_finite_gradient(self) -> None:
+        inputs = self.rng.integers(0, model.VOCAB_SIZE, size=(4, 16), dtype=np.int64)
+        targets = self.rng.integers(0, model.VOCAB_SIZE, size=(4, 16), dtype=np.int64)
+        loss, gradients = model.loss_and_gradients(self.parameters, inputs, targets)
+        self.assertTrue(np.isfinite(loss))
+        self.assertTrue(all(np.isfinite(value).all() for value in gradients.values()))
+
+    def test_prompt_memory_loss_has_finite_gradient(self) -> None:
+        length = model.PROMPT_STEPS + model.SUPERVISED_TARGET_STEPS - 1
+        inputs = self.rng.integers(0, model.VOCAB_SIZE, size=(2, length), dtype=np.int64)
+        targets = self.rng.integers(0, model.VOCAB_SIZE, size=(2, length), dtype=np.int64)
+        mask = np.zeros_like(inputs, dtype=np.float32)
+        mask[:, model.PROMPT_STEPS - 1 :] = 1
+        loss, gradients = model.loss_and_gradients(
+            self.parameters,
+            inputs,
+            targets,
+            mask,
+            model.PROMPT_STEPS - 1,
+        )
+        self.assertTrue(np.isfinite(loss))
+        self.assertGreater(float(np.abs(gradients["wch"]).sum()), 0)
+        self.assertTrue(all(np.isfinite(value).all() for value in gradients.values()))
+
+    def test_shape_validation_rejects_stale_artifacts(self) -> None:
+        tensors = model.quantize_model(self.parameters)
+        tensors["whh"]["shape"] = [32, 32]
+        with self.assertRaises(ValueError):
+            model.validate_tensors(tensors)
+
+    def test_supervised_batch_masks_only_assistant_tokens(self) -> None:
+        examples = [{"user": "hello", "assistant": "hello there"}]
+        inputs, targets, mask = model.supervised_batch(examples, self.rng, 1)
+        self.assertEqual(inputs.shape, targets.shape)
+        self.assertEqual(inputs.shape, mask.shape)
+        self.assertEqual(mask[:, : model.PROMPT_STEPS - 1].sum(), 0)
+        self.assertGreater(mask.sum(), 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
