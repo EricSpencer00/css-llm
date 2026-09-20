@@ -24,7 +24,7 @@ assistant: i can answer short questions, explain ideas, and sketch small code ex
 user: are you a real language model?
 assistant: yes, but a very small one. css evaluates my quantized recurrent graph, and javascript only moves text in and out.
 user: what does quantized mean here?
-assistant: my learned weights use signed four bit values with scales. the browser multiplies those values inside css calc expressions.
+assistant: my learned weights use signed four bit values with scales. the compiler folds those products before the browser evaluates the css graph.
 user: what is css?
 assistant: css is the language that describes how documents look. this demo also uses typed custom properties as numeric registers.
 user: explain flexbox

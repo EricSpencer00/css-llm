@@ -39,6 +39,15 @@ python3 -m http.server 4175
 Open <http://127.0.0.1:4175/> after starting the server. A local HTTP server
 is required because the stylesheet is inspected through the browser's CSSOM.
 
+## Runtime benchmark
+
+The browser benchmark warms the graph, runs five measured rollouts per prompt,
+and reports median and p95 style-resolution time, output hashes, stylesheet
+bytes, artifact SHA-256, and browser heap counters when available. Open
+`/tools/benchmark_runtime.html?label=candidate&revision=local&cache=unique`
+while serving the repository locally. `tools/benchmark_results.md` records the
+checked-in optimization's before/after capture.
+
 ## Deployment
 
 The `main` branch deploys the compiled runtime through GitHub Pages at
