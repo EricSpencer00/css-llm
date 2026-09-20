@@ -47,6 +47,25 @@ class CSSModelTests(unittest.TestCase):
         self.assertNotIn("--css-rnn-", css)
         self.assertNotIn("--gh--1-", css)
 
+    def test_compiler_constant_folds_quantized_coefficients(self) -> None:
+        tensors = model.quantize_model(self.parameters)
+        css = model.generate_css(tensors, "test-hash", 1, 42, 2.5)
+        self.assertLess(len(css.encode()), 80_000_000)
+        folded = model.quantized_value(tensors["wxh"], 0, 0)
+        self.assertIn(f"var(--p-0-0) * {folded}", css)
+        self.assertNotIn("--a0", css)
+        self.assertNotRegex(css, r"calc\(-?\d+ \* [-+\d.e]+\)")
+
+    def test_folded_quantized_values_round_trip_every_tensor(self) -> None:
+        tensors = model.quantize_model(self.parameters)
+        for tensor in tensors.values():
+            for row, values in enumerate(tensor["q"]):
+                for column, _ in enumerate(values):
+                    expected = tensor["q"][row][column] * float(
+                        model.css_number(tensor["scales"][column])
+                    )
+                    self.assertEqual(float(model.quantized_value(tensor, row, column)), expected)
+
     def test_forward_loss_has_finite_gradient(self) -> None:
         inputs = self.rng.integers(0, model.VOCAB_SIZE, size=(4, 16), dtype=np.int64)
         targets = self.rng.integers(0, model.VOCAB_SIZE, size=(4, 16), dtype=np.int64)

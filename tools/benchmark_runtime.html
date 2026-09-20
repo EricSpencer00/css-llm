@@ -1,0 +1,259 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>CSS LLM runtime benchmark</title>
+<pre id="metrics">loading</pre>
+<div data-css-rnn-engine aria-hidden="true"></div>
+<script>
+const VOCABULARY = "abcdefghijklmnopqrstuvwxyz0123456789 .,!?\'\n:;(){}[]+-*/=#_<>\"%&|";
+const PROMPTS = ["user: what can you do?\n", "user: write a css button\n"];
+const PROMPT_STEPS = 32;
+const GENERATED_STEPS = 96;
+const WARMUPS = 2;
+const RUNS = 5;
+const engine = document.querySelector("[data-css-rnn-engine]");
+const metrics = document.querySelector("#metrics");
+
+function cssVar(prefix, index, character) {
+  return character === undefined
+    ? `--${prefix}-${index}`
+    : `--${prefix}-${index}-${character}`;
+}
+
+function bindPrompt(value) {
+  const normalized = [...value.toLowerCase()]
+    .map((character) => (VOCABULARY.includes(character) ? character : " "))
+    .join("")
+    .slice(-PROMPT_STEPS)
+    .padStart(PROMPT_STEPS, " ");
+
+  for (let step = 0; step < PROMPT_STEPS; step += 1) {
+    const token = VOCABULARY.indexOf(normalized[step]);
+    for (let character = 0; character < VOCABULARY.length; character += 1) {
+      engine.style.setProperty(cssVar("p", step, character), token === character ? "1" : "0");
+    }
+  }
+}
+
+function readOutput() {
+  const computed = getComputedStyle(engine);
+  let output = "";
+  for (let step = 0; step < GENERATED_STEPS; step += 1) {
+    output += computed.getPropertyValue(cssVar("y", step)).trim() + ",";
+  }
+  return output;
+}
+
+function hash(value) {
+  let result = 2166136261;
+  for (const character of value) {
+    result ^= character.charCodeAt(0);
+    result = Math.imul(result, 16777619);
+  }
+  return (result >>> 0).toString(16);
+}
+
+async function sha256(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function memorySnapshot() {
+  const memory = performance.memory;
+  if (!memory) return null;
+  return {
+    jsHeapSizeLimit: memory.jsHeapSizeLimit,
+    totalJSHeapSize: memory.totalJSHeapSize,
+    usedJSHeapSize: memory.usedJSHeapSize,
+  };
+}
+
+function percentile(values, fraction) {
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1));
+  return Number(sorted[index].toFixed(2));
+}
+
+function summarize(values) {
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return {
+    count: values.length,
+    meanMs: Number((total / values.length).toFixed(2)),
+    medianMs: percentile(values, 0.5),
+    p95Ms: percentile(values, 0.95),
+    minMs: Number(Math.min(...values).toFixed(2)),
+    maxMs: Number(Math.max(...values).toFixed(2)),
+  };
+}
+
+function sameNumberSet(actual, expected) {
+  if (actual.size !== expected.size) return false;
+  for (const value of expected) {
+    if (!actual.has(value)) return false;
+  }
+  return true;
+}
+
+function emittedScale(value) {
+  const rounded = Math.fround(Number(value));
+  return rounded === 0 ? 0 : Number(rounded.toPrecision(9));
+}
+
+async function verifyFoldedNumbers(stylesheetText, cacheKey) {
+  const weightsResponse = await fetch(`../model/weights.json?benchmark=${encodeURIComponent(cacheKey)}`, {
+    cache: "no-store",
+  });
+  if (!weightsResponse.ok) throw new Error(`weights.json fetch failed: ${weightsResponse.status}`);
+  const payload = await weightsResponse.json();
+  const matrixExpected = new Set();
+  const biasExpected = new Set();
+  for (const [name, tensor] of Object.entries(payload.weights)) {
+    const target = name === "bh" || name === "by" ? biasExpected : matrixExpected;
+    for (let row = 0; row < tensor.q.length; row += 1) {
+      for (let column = 0; column < tensor.q[row].length; column += 1) {
+        target.add(tensor.q[row][column] * emittedScale(tensor.scales[column]));
+      }
+    }
+  }
+
+  const number = "[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:e[-+]?\\d+)?";
+  const productPattern = new RegExp(`(?:var\\(--[^)]*\\)|0)\\s*\\*\\s*(${number})`, "g");
+  const biasPattern = new RegExp(
+    `--(?:ph|l)-[^:]+:\\s*(?:clamp\\(-1,\\s*)?calc\\(\\s*(${number})\\s*\\+`,
+    "g",
+  );
+  const matrixEmitted = new Set();
+  const biasEmitted = new Set();
+  for (const match of stylesheetText.matchAll(productPattern)) matrixEmitted.add(Number(match[1]));
+  for (const match of stylesheetText.matchAll(biasPattern)) biasEmitted.add(Number(match[1]));
+
+  const values = [...new Set([...matrixEmitted, ...biasEmitted])];
+  const probeStyle = document.createElement("style");
+  probeStyle.textContent = '@property --css-rnn-probe { syntax: "<number>"; inherits: false; initial-value: 0; }';
+  document.head.append(probeStyle);
+  const probeElements = values.map((value) => {
+    const element = document.createElement("div");
+    element.hidden = true;
+    element.style.setProperty("--css-rnn-probe", String(value));
+    document.body.append(element);
+    return element;
+  });
+  const browserMismatches = [];
+  let browserProbeMaxAbsoluteError = 0;
+  for (let index = 0; index < probeElements.length; index += 1) {
+    const parsed = Number(getComputedStyle(probeElements[index]).getPropertyValue("--css-rnn-probe"));
+    const absoluteError = Math.abs(parsed - values[index]);
+    browserProbeMaxAbsoluteError = Math.max(browserProbeMaxAbsoluteError, absoluteError);
+    const tolerance = Math.max(1e-9, Math.abs(values[index]) * 1e-5);
+    if (!Number.isFinite(parsed) || absoluteError > tolerance) {
+      if (browserMismatches.length < 10) browserMismatches.push({ emitted: values[index], parsed });
+    }
+  }
+  for (const element of probeElements) element.remove();
+  probeStyle.remove();
+
+  return {
+    expectedMatrixValues: matrixExpected.size,
+    emittedMatrixValues: matrixEmitted.size,
+    expectedBiasValues: biasExpected.size,
+    emittedBiasValues: biasEmitted.size,
+    matrixValuesMatch: sameNumberSet(matrixEmitted, matrixExpected),
+    biasValuesMatch: sameNumberSet(biasEmitted, biasExpected),
+    browserProbeValues: values.length,
+    browserProbeTolerance: "1e-5 relative, 1e-9 absolute floor",
+    browserProbeMaxAbsoluteError,
+    browserProbeMismatches: browserMismatches,
+  };
+}
+
+function nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+async function benchmark() {
+  const query = new URLSearchParams(location.search);
+  const cacheKey = query.get("cache") || String(Date.now());
+  const artifactRevision = query.get("revision") || "unspecified";
+  const artifactLabel = query.get("label") || "unspecified";
+  const stylesheet = document.createElement("link");
+  stylesheet.rel = "stylesheet";
+  stylesheet.href = `../css-model.css?benchmark=${encodeURIComponent(cacheKey)}`;
+  const stylesheetUrl = new URL(stylesheet.href, location.href).href;
+  const stylesheetReady = new Promise((resolve, reject) => {
+    stylesheet.addEventListener("load", resolve, { once: true });
+    stylesheet.addEventListener("error", () => reject(new Error("css-model.css did not load")), { once: true });
+  });
+  document.head.append(stylesheet);
+  await stylesheetReady;
+  await nextFrame();
+
+  const resource = performance.getEntriesByType("resource")
+    .filter((entry) => entry.name === stylesheetUrl && entry.initiatorType === "link")
+    .at(-1);
+  const artifactResponse = await fetch(stylesheetUrl, { cache: "no-store" });
+  if (!artifactResponse.ok) throw new Error(`css-model.css fetch failed: ${artifactResponse.status}`);
+  const artifactBytes = await artifactResponse.arrayBuffer();
+  const verification = query.get("verify") === "1"
+    ? await verifyFoldedNumbers(new TextDecoder().decode(artifactBytes), cacheKey)
+    : null;
+  const warmupOutputHashes = [];
+  for (let run = 0; run < WARMUPS; run += 1) {
+    for (const prompt of PROMPTS) {
+      bindPrompt(prompt);
+      warmupOutputHashes.push(hash(readOutput()));
+    }
+  }
+
+  const memoryBefore = memorySnapshot();
+  const samples = [];
+  for (let run = 0; run < RUNS; run += 1) {
+    for (let promptIndex = 0; promptIndex < PROMPTS.length; promptIndex += 1) {
+      bindPrompt(PROMPTS[promptIndex]);
+      const start = performance.now();
+      const output = readOutput();
+      samples.push({
+        run: run + 1,
+        promptIndex,
+        ms: Number((performance.now() - start).toFixed(2)),
+        outputHash: hash(output),
+      });
+    }
+  }
+  const memoryAfter = memorySnapshot();
+  const allMs = samples.map((sample) => sample.ms);
+  const byPrompt = PROMPTS.map((prompt, promptIndex) => ({
+    prompt,
+    stats: summarize(samples
+      .filter((sample) => sample.promptIndex === promptIndex)
+      .map((sample) => sample.ms)),
+    outputHashes: [...new Set(samples
+      .filter((sample) => sample.promptIndex === promptIndex)
+      .map((sample) => sample.outputHash))],
+  }));
+
+  metrics.textContent = JSON.stringify({
+    userAgent: navigator.userAgent,
+    artifactLabel,
+    artifactRevision,
+    artifactSha256: await sha256(artifactBytes),
+    cssBytes: artifactBytes.byteLength,
+    decodedBodySize: resource?.decodedBodySize ?? null,
+    cssLoadMs: resource?.duration ?? null,
+    verification,
+    warmups: WARMUPS,
+    runsPerPrompt: RUNS,
+    prompts: PROMPTS,
+    warmupOutputHashes,
+    stats: summarize(allMs),
+    byPrompt,
+    samples,
+    memoryBefore,
+    memoryAfter,
+  }, null, 2);
+}
+
+benchmark().catch((error) => {
+  metrics.textContent = JSON.stringify({ error: error.message }, null, 2);
+});
+</script>

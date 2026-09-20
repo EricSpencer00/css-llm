@@ -730,12 +730,27 @@ def hard_tanh_expression(terms: list[str]) -> str:
     return "clamp(-1, " + sum_expression(terms) + ", 1)"
 
 
+def quantized_float(tensor: dict[str, Any], row: int, column: int) -> float:
+    scale = float(css_number(tensor["scales"][column]))
+    return tensor["q"][row][column] * scale
+
+
+def compact_number(value: float) -> str:
+    # Seventeen significant digits round-trip the browser's IEEE-754 result
+    # from q * the emitted nine-digit scale without a second quantization.
+    return "0" if value == 0 else format(float(value), ".17g")
+
+
+def quantized_value(tensor: dict[str, Any], row: int, column: int) -> str:
+    return compact_number(quantized_float(tensor, row, column))
+
+
 def qvalue(tensor: dict[str, Any], row: int, column: int) -> str:
-    return f"calc({tensor['q'][row][column]} * {css_number(tensor['scales'][column])})"
+    return quantized_value(tensor, row, column)
 
 
 def bias_value(tensor: dict[str, Any], index: int) -> str:
-    return f"calc({tensor['q'][0][index]} * {css_number(tensor['scales'][index])})"
+    return quantized_value(tensor, 0, index)
 
 
 def register_property(registrations: list[str], name: str) -> None:
@@ -876,7 +891,8 @@ def generate_css(
  * teacher: {teacher_repo or "none"} · shipped runtime has no model download
  * training steps: {training_steps} · seed: {seed} · validation loss: {css_number(validation_loss)}
  * Every multiply, sum, activation, comparison, argmax, and recurrent step below
- * is evaluated by the browser's CSS style engine.
+ * is evaluated by the browser's CSS style engine. Quantized products are
+ * constant-folded during lowering to keep the graph compact.
  */
 """
     return header + "\n".join(registrations) + "\n\n[data-css-rnn-engine] {\n" + "\n".join(declarations) + "\n}\n"
@@ -920,7 +936,7 @@ def save_weights(
             "output_bits": OUTPUT_BITS,
             "bias_bits": BIAS_BITS,
             "scheme": "symmetric per-output-channel weight-only quantization with mixed precision",
-            "inference": "CSS dequantizes signed integers times scales inside calc()",
+            "inference": "CSS uses constant-folded numeric products of signed integers and scales",
         },
         "stability": {
             "recurrent_spectral_limit": RECURRENT_SPECTRAL_LIMIT,
